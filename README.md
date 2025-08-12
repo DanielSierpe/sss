@@ -1,1 +1,8 @@
-npm install --save-dev @testing-library/react @testing-library/user-event @testing-library/jest-dom jest @types/jest ts-jest
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'jsdom',
+  setupFilesAfterEnv: ['@testing-library/jest-dom/extend-expect'],
+  moduleNameMapper: {
+    '\\.(css)$': 'identity-obj-proxy',
+  },
+};
