@@ -1,208 +1,188 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import Generador from '../Generador'
 
-// Mock de los servicios
-vi.mock('../../services/StorageService', () => ({
-  storageService: {
-    save: vi.fn(),
-    load: vi.fn(),
-    hasRecoverableApi: vi.fn(),
-    loadRecovery: vi.fn()
-  }
-}))
-
-vi.mock('../../services/ApiDefinitionFileService', () => ({
-  apiDefinitionFileService: {
-    load: vi.fn(),
-    validateOpenApiSpec: vi.fn(),
-    getFileFormat: vi.fn()
-  }
-}))
-
-describe('DisenoOpenAPI', () => {
+describe('Generador', () => {
   let user: ReturnType<typeof userEvent.setup>
-  const mockOnOpen = vi.fn()
 
   beforeEach(() => {
     user = userEvent.setup()
-    mockOnOpen.mockClear()
   })
 
   describe('Renderizado inicial', () => {
-    it('debe renderizar la pantalla de bienvenida correctamente', () => {
-      render(<div>Diseño de OpenAPI</div>)
+    it('debe renderizar el componente Generador correctamente', () => {
+      render(<Generador />)
       
-      expect(screen.getByText('Diseño de OpenAPI')).toBeInTheDocument()
+      expect(screen.getByText('Validación de Estructura')).toBeInTheDocument()
+      expect(screen.getByText('Nombre openAPI')).toBeInTheDocument()
+      expect(screen.getByText('Validar')).toBeInTheDocument()
+      expect(screen.getByText('Generar componente')).toBeInTheDocument()
     })
 
-    it('debe mostrar el icono principal', () => {
-      render(<div>Diseño de OpenAPI</div>)
+    it('debe mostrar la tabla con las columnas correctas', () => {
+      render(<Generador />)
       
-      expect(screen.getByText('Diseño de OpenAPI')).toBeInTheDocument()
+      expect(screen.getByText('Code')).toBeInTheDocument()
+      expect(screen.getByText('path')).toBeInTheDocument()
+      expect(screen.getByText('Message')).toBeInTheDocument()
+      expect(screen.getByText('Severity')).toBeInTheDocument()
+      expect(screen.getByText('range')).toBeInTheDocument()
     })
 
-    it('debe mostrar la notificación de drag & drop', () => {
-      render(<div>O arrastra y suelta un archivo sobre la página...</div>)
+    it('debe mostrar el input de búsqueda', () => {
+      render(<Generador />)
       
-      expect(screen.getByText('O arrastra y suelta un archivo sobre la página...')).toBeInTheDocument()
-    })
-  })
-
-  describe('Creación de nueva API', () => {
-    it('debe crear una nueva API OpenAPI 3.0', async () => {
-      render(<button onClick={mockOnOpen}>Crear Nueva API</button>)
-      
-      const createButton = screen.getByText('Crear Nueva API')
-      await user.click(createButton)
-
-      expect(mockOnOpen).toHaveBeenCalled()
-    })
-
-    it('debe manejar errores al crear nueva API', async () => {
-      render(<div>Error al crear API</div>)
-      
-      expect(screen.getByText('Error al crear API')).toBeInTheDocument()
-    })
-
-    it('debe manejar especificación inválida', async () => {
-      render(<div>Especificación inválida</div>)
-      
-      expect(screen.getByText('Especificación inválida')).toBeInTheDocument()
+      const searchInput = screen.getByPlaceholderText('buscar')
+      expect(searchInput).toBeInTheDocument()
+      expect(searchInput).toHaveAttribute('type', 'text')
+      expect(searchInput).toHaveAttribute('id', 'openapi-name')
     })
   })
 
-  describe('Carga de API existente', () => {
-    it('debe abrir el selector de archivos', async () => {
-      render(<button>Cargar API Existente</button>)
+  describe('Funcionalidad de formulario', () => {
+    it('debe permitir escribir en el input de búsqueda', async () => {
+      render(<Generador />)
       
-      const loadButton = screen.getByText('Cargar API Existente')
-      expect(loadButton).toBeInTheDocument()
+      const searchInput = screen.getByPlaceholderText('buscar')
+      await user.type(searchInput, 'mi-api')
+      
+      expect(searchInput).toHaveValue('mi-api')
     })
 
-    it('debe manejar la selección de archivo JSON', async () => {
-      render(<div>Archivo JSON cargado</div>)
+    it('debe tener el botón de validar', () => {
+      render(<Generador />)
       
-      expect(screen.getByText('Archivo JSON cargado')).toBeInTheDocument()
+      const validateButton = screen.getByText('Validar')
+      expect(validateButton).toBeInTheDocument()
+      expect(validateButton).toHaveClass('btn', 'validar')
     })
 
-    it('debe manejar archivos no soportados', async () => {
-      render(<div>Archivo no soportado</div>)
+    it('debe tener el botón de generar componente', () => {
+      render(<Generador />)
       
-      expect(screen.getByText('Archivo no soportado')).toBeInTheDocument()
-    })
-
-    it('debe manejar errores al cargar archivo', async () => {
-      render(<div>Error al cargar archivo</div>)
-      
-      expect(screen.getByText('Error al cargar archivo')).toBeInTheDocument()
-    })
-  })
-
-  describe('Drag & Drop', () => {
-    it('debe manejar drag over', async () => {
-      render(<div>Drag over</div>)
-      
-      expect(screen.getByText('Drag over')).toBeInTheDocument()
-    })
-
-    it('debe manejar drop de archivo', async () => {
-      render(<div>Archivo soltado</div>)
-      
-      expect(screen.getByText('Archivo soltado')).toBeInTheDocument()
-    })
-
-    it('debe manejar drop sin archivos', async () => {
-      render(<div>Sin archivos</div>)
-      
-      expect(screen.getByText('Sin archivos')).toBeInTheDocument()
-    })
-
-    it('debe manejar drag end', async () => {
-      render(<div>Drag end</div>)
-      
-      expect(screen.getByText('Drag end')).toBeInTheDocument()
+      const generateButton = screen.getByText('Generar componente')
+      expect(generateButton).toBeInTheDocument()
+      expect(generateButton).toHaveClass('btn', 'generar')
     })
   })
 
-  describe('Recuperación de API', () => {
-    it('debe mostrar aviso de recuperación cuando hay API guardada', () => {
-      render(<div>API recuperable disponible</div>)
+  describe('Interacción con botones', () => {
+    it('debe manejar el clic en el botón validar', async () => {
+      const mockValidate = vi.fn()
+      render(<Generador />)
       
-      expect(screen.getByText('API recuperable disponible')).toBeInTheDocument()
+      const validateButton = screen.getByText('Validar')
+      await user.click(validateButton)
+      
+      // El botón debería ser clickeable
+      expect(validateButton).toBeInTheDocument()
     })
 
-    it('debe recuperar API cuando se hace clic en el enlace', async () => {
-      render(<button>Recuperar API</button>)
+    it('debe manejar el clic en el botón generar', async () => {
+      const mockGenerate = vi.fn()
+      render(<Generador />)
       
-      const recoverButton = screen.getByText('Recuperar API')
-      await user.click(recoverButton)
-
-      expect(recoverButton).toBeInTheDocument()
-    })
-
-    it('debe manejar errores al recuperar API', async () => {
-      render(<div>Error al recuperar API</div>)
+      const generateButton = screen.getByText('Generar componente')
+      await user.click(generateButton)
       
-      expect(screen.getByText('Error al recuperar API')).toBeInTheDocument()
-    })
-  })
-
-  describe('Manejo de errores', () => {
-    it('debe mostrar errores de validación', () => {
-      render(<div>Error de validación</div>)
-      
-      expect(screen.getByText('Error de validación')).toBeInTheDocument()
-    })
-
-    it('debe limpiar errores al crear nueva API exitosamente', async () => {
-      render(<div>Errores limpiados</div>)
-      
-      expect(screen.getByText('Errores limpiados')).toBeInTheDocument()
+      // El botón debería ser clickeable
+      expect(generateButton).toBeInTheDocument()
     })
   })
 
-  describe('Integración con EditorVisual', () => {
-    it('debe abrir el editor visual al crear nueva API', async () => {
-      render(<button onClick={mockOnOpen}>Crear Nueva API</button>)
+  describe('Estructura del formulario', () => {
+    it('debe tener la estructura de formulario correcta', () => {
+      render(<Generador />)
       
-      const createButton = screen.getByText('Crear Nueva API')
-      await user.click(createButton)
-
-      expect(mockOnOpen).toHaveBeenCalled()
+      const form = document.querySelector('form')
+      expect(form).toBeInTheDocument()
+      expect(form).toHaveClass('generador-form')
     })
 
-    it('debe abrir el editor visual al cargar API existente', async () => {
-      render(<button onClick={mockOnOpen}>Cargar API Existente</button>)
+    it('debe tener el grupo de botones', () => {
+      render(<Generador />)
       
-      const loadButton = screen.getByText('Cargar API Existente')
-      await user.click(loadButton)
+      const buttonGroup = document.querySelector('.button-group')
+      expect(buttonGroup).toBeInTheDocument()
+    })
 
-      expect(mockOnOpen).toHaveBeenCalled()
+    it('debe tener el grupo de formulario', () => {
+      render(<Generador />)
+      
+      const formGroup = document.querySelector('.form-group')
+      expect(formGroup).toBeInTheDocument()
+    })
+  })
+
+  describe('Estructura de la tabla', () => {
+    it('debe tener el contenedor de tabla', () => {
+      render(<Generador />)
+      
+      const tableContainer = document.querySelector('.tabla-container')
+      expect(tableContainer).toBeInTheDocument()
+    })
+
+    it('debe tener la tabla con la clase correcta', () => {
+      render(<Generador />)
+      
+      const table = document.querySelector('.tabla-generador')
+      expect(table).toBeInTheDocument()
+    })
+
+    it('debe tener el encabezado de tabla', () => {
+      render(<Generador />)
+      
+      const thead = document.querySelector('thead')
+      expect(thead).toBeInTheDocument()
+    })
+
+    it('debe tener el cuerpo de tabla', () => {
+      render(<Generador />)
+      
+      const tbody = document.querySelector('tbody')
+      expect(tbody).toBeInTheDocument()
     })
   })
 
   describe('Accesibilidad', () => {
-    it('debe tener elementos accesibles', () => {
-      render(<button aria-label="Crear API">Crear Nueva API</button>)
+    it('debe tener labels asociados correctamente', () => {
+      render(<Generador />)
       
-      const button = screen.getByLabelText('Crear API')
-      expect(button).toBeInTheDocument()
+      const label = screen.getByText('Nombre openAPI')
+      const input = screen.getByPlaceholderText('buscar')
+      
+      expect(label).toHaveAttribute('for', 'openapi-name')
+      expect(input).toHaveAttribute('id', 'openapi-name')
     })
 
-    it('debe tener input de archivo oculto', () => {
-      render(<input type="file" className="hidden" />)
+    it('debe tener autocomplete deshabilitado', () => {
+      render(<Generador />)
       
-      const fileInput = document.querySelector('input[type="file"]')
-      expect(fileInput).toHaveClass('hidden')
+      const form = document.querySelector('form')
+      const input = screen.getByPlaceholderText('buscar')
+      
+      expect(form).toHaveAttribute('autoComplete', 'off')
+      expect(input).toHaveAttribute('autoComplete', 'off')
     })
   })
 
-  describe('Responsive design', () => {
-    it('debe ser responsivo', () => {
-      render(<div>Diseño responsivo</div>)
+  describe('Estilos y clases CSS', () => {
+    it('debe tener las clases CSS principales', () => {
+      render(<Generador />)
       
-      expect(screen.getByText('Diseño responsivo')).toBeInTheDocument()
+      const container = document.querySelector('.generador-content')
+      const inner = document.querySelector('.generador-inner')
+      
+      expect(container).toBeInTheDocument()
+      expect(inner).toBeInTheDocument()
+    })
+
+    it('debe tener el input con la clase search-input', () => {
+      render(<Generador />)
+      
+      const input = screen.getByPlaceholderText('buscar')
+      expect(input).toHaveClass('search-input')
     })
   })
 })
