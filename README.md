@@ -1,188 +1,281 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import Generador from '../Generador'
+.diseno-openapi-content {
+  flex: 1;
+  padding: 0;
+  background: #fff;
+  min-height: 100%;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  color: #333;
+}
 
-describe('Generador', () => {
-  let user: ReturnType<typeof userEvent.setup>
+.diseno-openapi-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: calc(100vh - 64px);
+  padding-top: 0;
+}
 
-  beforeEach(() => {
-    user = userEvent.setup()
-  })
+/* Cuando contiene el editor, no centrar */
+.diseno-openapi-inner.editor-mode {
+  align-items: stretch;
+  justify-content: flex-start;
+}
 
-  describe('Renderizado inicial', () => {
-    it('debe renderizar el componente Generador correctamente', () => {
-      render(<Generador />)
-      
-      expect(screen.getByText('Validación de Estructura')).toBeInTheDocument()
-      expect(screen.getByText('Nombre openAPI')).toBeInTheDocument()
-      expect(screen.getByText('Validar')).toBeInTheDocument()
-      expect(screen.getByText('Generar componente')).toBeInTheDocument()
-    })
+/* Icons */
+.pficon {
+  font-family: 'PatternFlyIcons-webfont';
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+}
 
-    it('debe mostrar la tabla con las columnas correctas', () => {
-      render(<Generador />)
-      
-      expect(screen.getByText('Code')).toBeInTheDocument()
-      expect(screen.getByText('path')).toBeInTheDocument()
-      expect(screen.getByText('Message')).toBeInTheDocument()
-      expect(screen.getByText('Severity')).toBeInTheDocument()
-      expect(screen.getByText('range')).toBeInTheDocument()
-    })
+.pficon-add-circle-o:before {
+  content: "\e60d";
+}
 
-    it('debe mostrar el input de búsqueda', () => {
-      render(<Generador />)
-      
-      const searchInput = screen.getByPlaceholderText('buscar')
-      expect(searchInput).toBeInTheDocument()
-      expect(searchInput).toHaveAttribute('type', 'text')
-      expect(searchInput).toHaveAttribute('id', 'openapi-name')
-    })
-  })
+.pficon-warning-triangle-o:before {
+  content: "\e60e";
+}
 
-  describe('Funcionalidad de formulario', () => {
-    it('debe permitir escribir en el input de búsqueda', async () => {
-      render(<Generador />)
-      
-      const searchInput = screen.getByPlaceholderText('buscar')
-      await user.type(searchInput, 'mi-api')
-      
-      expect(searchInput).toHaveValue('mi-api')
-    })
+.pficon-error-circle-o:before {
+  content: "\e60f";
+}
 
-    it('debe tener el botón de validar', () => {
-      render(<Generador />)
-      
-      const validateButton = screen.getByText('Validar')
-      expect(validateButton).toBeInTheDocument()
-      expect(validateButton).toHaveClass('btn', 'validar')
-    })
+/* Blank Slate PatternFly */
+.blank-slate-pf {
+  text-align: center;
+  padding: 80px 40px;
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 20px;
+  margin: 0 auto;
+  max-width: 700px;
+  width: 100%;
+  transition: all 0.4s ease;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15), 0 10px 30px rgba(0, 0, 0, 0.1);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
 
-    it('debe tener el botón de generar componente', () => {
-      render(<Generador />)
-      
-      const generateButton = screen.getByText('Generar componente')
-      expect(generateButton).toBeInTheDocument()
-      expect(generateButton).toHaveClass('btn', 'generar')
-    })
-  })
+.blank-slate-pf.dragging {
+  border: 3px dashed #e60000;
+  background-color: #fff;
+  box-shadow: 0 30px 80px rgba(230, 0, 0, 0.25), 0 15px 40px rgba(230, 0, 0, 0.15);
+  transform: scale(1.02) translate(-50%, -50%);
+}
 
-  describe('Interacción con botones', () => {
-    it('debe manejar el clic en el botón validar', async () => {
-      const mockValidate = vi.fn()
-      render(<Generador />)
-      
-      const validateButton = screen.getByText('Validar')
-      await user.click(validateButton)
-      
-      // El botón debería ser clickeable
-      expect(validateButton).toBeInTheDocument()
-    })
+.blank-slate-pf-icon {
+  margin-bottom: 30px;
+}
 
-    it('debe manejar el clic en el botón generar', async () => {
-      const mockGenerate = vi.fn()
-      render(<Generador />)
-      
-      const generateButton = screen.getByText('Generar componente')
-      await user.click(generateButton)
-      
-      // El botón debería ser clickeable
-      expect(generateButton).toBeInTheDocument()
-    })
-  })
+.blank-slate-pf-icon .pficon {
+  font-size: 80px;
+  color: #e60000;
+  animation: float 3s ease-in-out infinite;
+}
 
-  describe('Estructura del formulario', () => {
-    it('debe tener la estructura de formulario correcta', () => {
-      render(<Generador />)
-      
-      const form = document.querySelector('form')
-      expect(form).toBeInTheDocument()
-      expect(form).toHaveClass('generador-form')
-    })
 
-    it('debe tener el grupo de botones', () => {
-      render(<Generador />)
-      
-      const buttonGroup = document.querySelector('.button-group')
-      expect(buttonGroup).toBeInTheDocument()
-    })
+.blank-slate-pf h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #333;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
-    it('debe tener el grupo de formulario', () => {
-      render(<Generador />)
-      
-      const formGroup = document.querySelector('.form-group')
-      expect(formGroup).toBeInTheDocument()
-    })
-  })
+.blank-slate-pf p {
+  font-size: 1.1rem;
+  color: #666;
+  margin-bottom: 15px;
+  line-height: 1.6;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
 
-  describe('Estructura de la tabla', () => {
-    it('debe tener el contenedor de tabla', () => {
-      render(<Generador />)
-      
-      const tableContainer = document.querySelector('.tabla-container')
-      expect(tableContainer).toBeInTheDocument()
-    })
+.blank-slate-pf a {
+  color: #e60000;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
 
-    it('debe tener la tabla con la clase correcta', () => {
-      render(<Generador />)
-      
-      const table = document.querySelector('.tabla-generador')
-      expect(table).toBeInTheDocument()
-    })
+.blank-slate-pf a:hover {
+  color: #cc0000;
+  text-decoration: underline;
+}
 
-    it('debe tener el encabezado de tabla', () => {
-      render(<Generador />)
-      
-      const thead = document.querySelector('thead')
-      expect(thead).toBeInTheDocument()
-    })
+/* Main Action */
+.blank-slate-pf-main-action {
+  margin-top: 40px;
+}
 
-    it('debe tener el cuerpo de tabla', () => {
-      render(<Generador />)
-      
-      const tbody = document.querySelector('tbody')
-      expect(tbody).toBeInTheDocument()
-    })
-  })
+.btn-group {
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+}
 
-  describe('Accesibilidad', () => {
-    it('debe tener labels asociados correctamente', () => {
-      render(<Generador />)
-      
-      const label = screen.getByText('Nombre openAPI')
-      const input = screen.getByPlaceholderText('buscar')
-      
-      expect(label).toHaveAttribute('for', 'openapi-name')
-      expect(input).toHaveAttribute('id', 'openapi-name')
-    })
+.btn {
+  display: inline-block;
+  padding: 12px 24px;
+  margin-bottom: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.42857143;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 
-    it('debe tener autocomplete deshabilitado', () => {
-      render(<Generador />)
-      
-      const form = document.querySelector('form')
-      const input = screen.getByPlaceholderText('buscar')
-      
-      expect(form).toHaveAttribute('autoComplete', 'off')
-      expect(input).toHaveAttribute('autoComplete', 'off')
-    })
-  })
+.btn-lg {
+  padding: 16px 32px;
+  font-size: 1.1rem;
+  line-height: 1.3333333;
+  border-radius: 15px;
+}
 
-  describe('Estilos y clases CSS', () => {
-    it('debe tener las clases CSS principales', () => {
-      render(<Generador />)
-      
-      const container = document.querySelector('.generador-content')
-      const inner = document.querySelector('.generador-inner')
-      
-      expect(container).toBeInTheDocument()
-      expect(inner).toBeInTheDocument()
-    })
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #e60000 0%, #cc0000 100%);
+  border-color: #e60000;
+  box-shadow: 0 4px 15px rgba(230, 0, 0, 0.3);
+}
 
-    it('debe tener el input con la clase search-input', () => {
-      render(<Generador />)
-      
-      const input = screen.getByPlaceholderText('buscar')
-      expect(input).toHaveClass('search-input')
-    })
-  })
-})
+.btn-primary:hover {
+  background: linear-gradient(135deg, #cc0000 0%, #b30000 100%);
+  border-color: #cc0000;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(230, 0, 0, 0.4);
+}
+
+.btn-default {
+  color: #333;
+  background: #fff;
+  border-color: #ddd;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.btn-default:hover {
+  background: #f8f9fa;
+  border-color: #e60000;
+  color: #e60000;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Recovery Notice */
+.recovery-notice {
+  margin-top: 30px;
+}
+
+.alert {
+  padding: 20px;
+  margin-bottom: 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.alert-warning {
+  color: #856404;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border-left: 4px solid #ffc107;
+}
+
+.alert-danger {
+  color: #721c24;
+  background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+  border-left: 4px solid #dc3545;
+}
+
+.alert-link {
+  font-weight: bold;
+  color: #e60000;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.alert-link:hover {
+  text-decoration: underline;
+}
+
+/* DND Notification */
+.dnd-notification {
+  margin-top: 30px;
+  font-size: 1rem;
+  color: #666;
+  font-style: italic;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px dashed #ccc;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .blank-slate-pf {
+    margin: 20px;
+    padding: 60px 30px;
+  }
+
+  .blank-slate-pf h1 {
+    font-size: 2rem;
+  }
+
+  .blank-slate-pf p {
+    font-size: 1rem;
+  }
+
+  .btn-group {
+    display: block;
+    margin-bottom: 15px;
+  }
+
+  .btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 15px;
+  }
+
+  .btn-lg {
+    padding: 14px 24px;
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .blank-slate-pf {
+    margin: 10px;
+    padding: 40px 20px;
+  }
+
+  .blank-slate-pf h1 {
+    font-size: 1.8rem;
+  }
+
+  .blank-slate-pf-icon .pficon {
+    font-size: 60px;
+  }
+} 
