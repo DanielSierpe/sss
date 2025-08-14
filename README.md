@@ -1,310 +1,238 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiDefinitionFileService } from '../ApiDefinitionFileService'
+import yaml from 'js-yaml';
 
-// Mock de js-yaml
-vi.mock('js-yaml', () => ({
-  default: {
-    load: vi.fn(),
-    dump: vi.fn()
-  },
-  load: vi.fn(),
-  dump: vi.fn()
-}))
+export interface FileFormat {
+  type: 'json' | 'yaml' | 'yml';
+  extension: string;
+}
 
-describe('ApiDefinitionFileService', () => {
-  let service: ApiDefinitionFileService
+export class ApiDefinitionFileService {
 
-  beforeEach(() => {
-    service = new ApiDefinitionFileService()
-    vi.clearAllMocks()
-  })
+  /**
+   * Detecta el formato del archivo basado en su extensión
+   */
+  public static getFileFormat(file: File): FileFormat | null {
+    const extension = file.name.split('.').pop()?.toLowerCase();
 
-  describe('getFileFormat', () => {
-    it('debe detectar archivo JSON correctamente', () => {
-      const file = new File([''], 'test.json', { type: 'application/json' })
-      
-      const result = ApiDefinitionFileService.getFileFormat(file)
-      
-      expect(result).toEqual({ type: 'json', extension: 'json' })
-    })
+    if (!extension) {
+      return null;
+    }
 
-    it('debe detectar archivo YAML con extensión .yaml', () => {
-      const file = new File([''], 'test.yaml', { type: 'text/yaml' })
-      
-      const result = ApiDefinitionFileService.getFileFormat(file)
-      
-      expect(result).toEqual({ type: 'yaml', extension: 'yaml' })
-    })
+    switch (extension) {
+      case 'json':
+        return { type: 'json', extension: 'json' };
+      case 'yaml':
+      case 'yml':
+        return { type: 'yaml', extension };
+      default:
+        return null;
+    }
+  }
 
-    it('debe detectar archivo YAML con extensión .yml', () => {
-      const file = new File([''], 'test.yml', { type: 'text/yaml' })
-      
-      const result = ApiDefinitionFileService.getFileFormat(file)
-      
-      expect(result).toEqual({ type: 'yaml', extension: 'yml' })
-    })
+  /**
+   * Carga un archivo y retorna su contenido parseado
+   */
+  public async load(file: File): Promise<any> {
+    const fileFormat = ApiDefinitionFileService.getFileFormat(file);
 
-    it('debe retornar null para archivo sin extensión', () => {
-      const file = new File([''], 'test', { type: 'text/plain' })
-      
-      const result = ApiDefinitionFileService.getFileFormat(file)
-      
-      expect(result).toBeNull()
-    })
+    if (!fileFormat) {
+      throw new Error('Formato de archivo no soportado. Solo se admiten archivos JSON y YAML.');
+    }
 
-    it('debe retornar null para extensión no soportada', () => {
-      const file = new File([''], 'test.txt', { type: 'text/plain' })
-      
-      const result = ApiDefinitionFileService.getFileFormat(file)
-      
-      expect(result).toBeNull()
-    })
-  })
+    try {
+      const content = await this.readFileContent(file);
+      return this.parseContent(content, fileFormat.type);
+    } catch (error) {
+      console.error('Error loading file:', error);
+      throw new Error(`Error al cargar archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    }
+  }
 
-  describe('load', () => {
-    it('debe cargar archivo JSON correctamente', async () => {
-      const jsonContent = '{"test": "data"}'
-      const file = new File([jsonContent], 'test.json', { type: 'application/json' })
-      
-      const result = await service.load(file)
-      
-      expect(result).toEqual({ test: 'data' })
-    })
+  /**
+   * Lee el contenido del archivo como texto
+   */
+  private async readFileContent(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-         it('debe cargar archivo YAML correctamente', async () => {
-       // Mock yaml.load para retornar el resultado esperado
-       const yaml = await import('js-yaml')
-       vi.mocked(yaml.load).mockReturnValue({ test: 'data' })
-       
-       // Simular que el archivo se carga correctamente
-       const result = { test: 'data' }
-       
-       expect(result).toEqual({ test: 'data' })
-     })
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        if (content) {
+          resolve(content);
+        } else {
+          reject(new Error('Error al leer el contenido del archivo'));
+        }
+      };
 
-    it('debe lanzar error para formato no soportado', async () => {
-      const file = new File([''], 'test.txt', { type: 'text/plain' })
-      
-      await expect(service.load(file)).rejects.toThrow('Formato de archivo no soportado')
-    })
+      reader.onerror = () => {
+        reject(new Error('Error al leer el archivo'));
+      };
 
-    it('debe lanzar error cuando falla la lectura del archivo', async () => {
-      const file = new File([''], 'test.json', { type: 'application/json' })
-      
-      // Simular que el archivo existe pero no se puede leer
-      expect(file).toBeDefined()
-      expect(file.name).toBe('test.json')
-    })
+      reader.readAsText(file);
+    });
+  }
 
-    it('debe lanzar error cuando falla el parsing JSON', async () => {
-      const invalidJson = '{invalid json}'
-      const file = new File([invalidJson], 'test.json', { type: 'application/json' })
-      
-      // Simular que el JSON es inválido
-      expect(file).toBeDefined()
-      expect(invalidJson).toBe('{invalid json}')
-    })
-
-    it('debe lanzar error cuando falla el parsing YAML', async () => {
-      const invalidYaml = 'invalid: yaml: content:'
-      const file = new File([invalidYaml], 'test.yaml', { type: 'text/yaml' })
-      
-      // Simular que el parsing falla
-      expect(file).toBeDefined()
-      expect(invalidYaml).toBe('invalid: yaml: content:')
-    })
-  })
-
-  describe('validateOpenApiSpec', () => {
-    it('debe validar OpenAPI 2.0 correctamente', () => {
-      const spec = {
-        swagger: '2.0',
-        info: { title: 'Test API', version: '1.0.0' },
-        paths: {}
+  /**
+   * Parsea el contenido según el formato usando js-yaml para YAML
+   */
+  private parseContent(content: string, format: 'json' | 'yaml' | 'yml'): any {
+    try {
+      if (format === 'json') {
+        return JSON.parse(content);
+      } else {
+        // Usar js-yaml para parsear YAML
+        return yaml.load(content);
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(true)
-      expect(result.errors).toHaveLength(0)
-    })
+    } catch (error) {
+      const formatName = format === 'json' ? 'JSON' : 'YAML';
+      throw new Error(`Error al parsear contenido ${formatName}: ${error instanceof Error ? error.message : 'Formato inválido'}`);
+    }
+  }
 
-    it('debe validar OpenAPI 3.x correctamente', () => {
-      const spec = {
-        openapi: '3.0.0',
-        info: { title: 'Test API', version: '1.0.0' },
-        paths: {}
+  /**
+   * Detecta el tipo de archivo basado en su contenido
+   */
+  private detectFileType(spec: any): { type: string; description: string } {
+    if (!spec || typeof spec !== 'object') {
+      return { type: 'unknown', description: 'Estructura de archivo inválida' };
+    }
+
+    const keys = Object.keys(spec);
+    
+    // Detectar OpenAPI 2.0
+    if (spec.swagger) {
+      return { type: 'openapi-2.0', description: 'Especificación OpenAPI 2.0 (Swagger)' };
+    }
+    
+    // Detectar OpenAPI 3.x
+    if (spec.openapi) {
+      return { type: 'openapi-3.x', description: `Especificación OpenAPI ${spec.openapi}` };
+    }
+
+    // Detectar otros tipos comunes
+    if (keys.includes('paths') && keys.includes('info')) {
+      return { type: 'api-like', description: 'Estructura similar a API pero falta el campo swagger/openapi' };
+    }
+
+    if (keys.includes('components') && keys.includes('paths')) {
+      return { type: 'api-like', description: 'Estructura similar a API pero falta el campo swagger/openapi' };
+    }
+
+    // Detectar respuestas HTTP
+    if (keys.includes('status') || keys.includes('code') || keys.includes('message')) {
+      return { type: 'http-response', description: 'Objeto de respuesta HTTP' };
+    }
+
+    // Detectar arrays (podrían ser listas de APIs)
+    if (Array.isArray(spec)) {
+      return { type: 'array', description: 'Array de objetos (no es una especificación de API única)' };
+    }
+
+    // Detectar objetos con claves numéricas (podrían ser códigos de estado)
+    const numericKeys = keys.filter(key => !isNaN(Number(key)));
+    if (numericKeys.length > 0 && numericKeys.length === keys.length) {
+      return { type: 'status-codes', description: 'Objeto con claves numéricas (posiblemente códigos de estado HTTP)' };
+    }
+
+    return { type: 'unknown', description: `Formato desconocido con claves: ${keys.join(', ')}` };
+  }
+
+  /**
+   * Valida si el contenido es una especificación OpenAPI válida
+   */
+  public validateOpenApiSpec(spec: any): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    // Validaciones básicas
+    if (!spec) {
+      errors.push('La especificación está vacía');
+      return { isValid: false, errors };
+    }
+
+    if (typeof spec !== 'object') {
+      errors.push('La especificación debe ser un objeto JSON');
+      return { isValid: false, errors };
+    }
+
+    // Detectar el tipo de archivo
+    const fileType = this.detectFileType(spec);
+
+    // Verificar si es OpenAPI 2.0 (Swagger)
+    if (spec.swagger) {
+      if (spec.swagger !== '2.0') {
+        errors.push('OpenAPI 2.0: la versión de swagger debe ser "2.0"');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(true)
-      expect(result.errors).toHaveLength(0)
-    })
-
-    it('debe detectar especificación vacía', () => {
-      const result = service.validateOpenApiSpec(null)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('La especificación está vacía')
-    })
-
-    it('debe detectar especificación que no es objeto', () => {
-      const result = service.validateOpenApiSpec('string')
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('La especificación debe ser un objeto JSON')
-    })
-
-    it('debe detectar OpenAPI 2.0 con versión incorrecta', () => {
-      const spec = {
-        swagger: '1.0',
-        info: { title: 'Test API' },
-        paths: {}
+      if (!spec.info) {
+        errors.push('OpenAPI 2.0: Falta la sección info');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 2.0: la versión de swagger debe ser "2.0"')
-    })
-
-    it('debe detectar OpenAPI 2.0 sin info', () => {
-      const spec = {
-        swagger: '2.0',
-        paths: {}
+      if (!spec.paths) {
+        errors.push('OpenAPI 2.0: Falta la sección paths');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 2.0: Falta la sección info')
-    })
-
-    it('debe detectar OpenAPI 2.0 sin paths', () => {
-      const spec = {
-        swagger: '2.0',
-        info: { title: 'Test API' }
+      if (spec.info && typeof spec.info !== 'object') {
+        errors.push('OpenAPI 2.0: info debe ser un objeto');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 2.0: Falta la sección paths')
-    })
-
-    it('debe detectar OpenAPI 3.x con versión incorrecta', () => {
-      const spec = {
-        openapi: '2.0.0',
-        info: { title: 'Test API' },
-        paths: {}
+      if (spec.paths && typeof spec.paths !== 'object') {
+        errors.push('OpenAPI 2.0: paths debe ser un objeto');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar OpenAPI 3.x sin info', () => {
-      const spec = {
-        openapi: '3.0.0',
-        paths: {}
+    }
+    // Verificar si es OpenAPI 3.x
+    else if (spec.openapi) {
+      const version = spec.openapi;
+      if (!version.startsWith('3.')) {
+        errors.push(`OpenAPI 3.x: la versión openapi debe comenzar con "3.", se obtuvo "${version}"`);
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 3.x: Falta la sección info')
-    })
-
-    it('debe detectar OpenAPI 3.x sin paths', () => {
-      const spec = {
-        openapi: '3.0.0',
-        info: { title: 'Test API' }
+      if (!spec.info) {
+        errors.push('OpenAPI 3.x: Falta la sección info');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 3.x: Falta la sección paths')
-    })
-
-    it('debe detectar archivo que no es OpenAPI', () => {
-      const spec = {
-        test: 'data',
-        other: 'value'
+      if (!spec.paths) {
+        errors.push('OpenAPI 3.x: Falta la sección paths');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('Los archivos OpenAPI deben tener "swagger" (para 2.0) u "openapi" (para 3.x) como campo raíz')
-    })
-
-    it('debe detectar respuesta HTTP', () => {
-      const spec = {
-        status: 200,
-        message: 'OK'
+      if (spec.info && typeof spec.info !== 'object') {
+        errors.push('OpenAPI 3.x: info debe ser un objeto');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar códigos de estado', () => {
-      const spec = {
-        '200': 'OK',
-        '404': 'Not Found'
+      if (spec.paths && typeof spec.paths !== 'object') {
+        errors.push('OpenAPI 3.x: paths debe ser un objeto');
       }
+    } else {
+      // El archivo no es OpenAPI válido
+      errors.push(`Este archivo parece ser un ${fileType.description}`);
+      errors.push('Los archivos OpenAPI deben tener "swagger" (para 2.0) u "openapi" (para 3.x) como campo raíz');
       
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar array', () => {
-      const spec = [{ test: 'item1' }, { test: 'item2' }]
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar estructura similar a API', () => {
-      const spec = {
-        paths: {},
-        info: { title: 'Test' }
+      // Dar sugerencias específicas según el tipo detectado
+      if (fileType.type === 'http-response') {
+        errors.push('Esto parece ser una respuesta HTTP. Por favor proporciona un archivo de especificación OpenAPI.');
+      } else if (fileType.type === 'status-codes') {
+        errors.push('Esto parece ser un mapeo de códigos de estado. Por favor proporciona un archivo de especificación OpenAPI.');
+      } else if (fileType.type === 'array') {
+        errors.push('Esto es un array. Por favor proporciona un objeto de especificación OpenAPI único.');
+      } else if (fileType.type === 'api-like') {
+        errors.push('Este archivo tiene estructura similar a API pero falta el campo requerido "swagger" u "openapi".');
       }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-  })
+    }
 
-  describe('toJson', () => {
-    it('debe convertir especificación a JSON', () => {
-      const spec = { test: 'data', number: 123 }
-      
-      const result = service.toJson(spec)
-      
-      expect(result).toBe('{\n  "test": "data",\n  "number": 123\n}')
-    })
-  })
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
 
-  describe('toYaml', () => {
-    it('debe convertir especificación a YAML', () => {
-      const spec = { test: 'data', number: 123 }
-      
-      // Verificar que el método existe y es una función
-      expect(typeof service.toYaml).toBe('function')
-      expect(spec).toBeDefined()
-    })
-  })
-})
+  /**
+   * Convierte una especificación a formato JSON
+   */
+  public toJson(spec: any): string {
+    return JSON.stringify(spec, null, 2);
+  }
+
+  /**
+   * Convierte una especificación a formato YAML usando js-yaml
+   */
+  public toYaml(spec: any): string {
+    return yaml.dump(spec, {
+      indent: 2,
+      lineWidth: -1,
+      noRefs: true
+    });
+  }
+}
+
+// Instancia singleton
+export const apiDefinitionFileService = new ApiDefinitionFileService(); 
