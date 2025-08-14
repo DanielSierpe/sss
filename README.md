@@ -1,310 +1,316 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ApiDefinitionFileService } from '../ApiDefinitionFileService'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { StorageService } from '../StorageService'
+import type { ApiDefinition, RecoveryApiDefinition } from '../StorageService'
 
-// Mock de js-yaml
-vi.mock('js-yaml', () => ({
-  default: {
-    load: vi.fn(),
-    dump: vi.fn()
-  },
-  load: vi.fn(),
-  dump: vi.fn()
-}))
+// Mock de localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+}
 
-describe('ApiDefinitionFileService', () => {
-  let service: ApiDefinitionFileService
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true
+})
+
+describe('StorageService', () => {
+  let storageService: StorageService
 
   beforeEach(() => {
-    service = new ApiDefinitionFileService()
+    storageService = new StorageService()
     vi.clearAllMocks()
   })
 
-  describe('getFileFormat', () => {
-    it('debe detectar archivo JSON correctamente', () => {
-      const file = new File([''], 'test.json', { type: 'application/json' })
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  describe('exists', () => {
+    it('debe retornar true cuando existe una API guardada', () => {
+      localStorageMock.getItem.mockReturnValue('{"spec": {"test": "data"}}')
       
-      const result = ApiDefinitionFileService.getFileFormat(file)
+      const result = storageService.exists()
       
-      expect(result).toEqual({ type: 'json', extension: 'json' })
+      expect(result).toBe(true)
+      expect(localStorageMock.getItem).toHaveBeenCalledWith('apicurito-api-definition')
     })
 
-    it('debe detectar archivo YAML con extensión .yaml', () => {
-      const file = new File([''], 'test.yaml', { type: 'text/yaml' })
+    it('debe retornar false cuando no existe una API guardada', () => {
+      localStorageMock.getItem.mockReturnValue(null)
       
-      const result = ApiDefinitionFileService.getFileFormat(file)
+      const result = storageService.exists()
       
-      expect(result).toEqual({ type: 'yaml', extension: 'yaml' })
+      expect(result).toBe(false)
     })
 
-    it('debe detectar archivo YAML con extensión .yml', () => {
-      const file = new File([''], 'test.yml', { type: 'text/yaml' })
+    it('debe retornar false cuando hay un error', () => {
+      localStorageMock.getItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
       
-      const result = ApiDefinitionFileService.getFileFormat(file)
+      const result = storageService.exists()
       
-      expect(result).toEqual({ type: 'yaml', extension: 'yml' })
+      expect(result).toBe(false)
+    })
+  })
+
+  describe('save', () => {
+    it('debe guardar una API correctamente', () => {
+      const apiDefinition: ApiDefinition = {
+        spec: { test: 'data' },
+        name: 'Test API'
+      }
+      
+      storageService.save(apiDefinition)
+      
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'apicurito-api-definition',
+        expect.stringContaining('"test":"data"')
+      )
     })
 
-    it('debe retornar null para archivo sin extensión', () => {
-      const file = new File([''], 'test', { type: 'text/plain' })
+    it('debe agregar modifiedOn al guardar', () => {
+      const apiDefinition: ApiDefinition = {
+        spec: { test: 'data' }
+      }
       
-      const result = ApiDefinitionFileService.getFileFormat(file)
+      storageService.save(apiDefinition)
       
-      expect(result).toBeNull()
+      const savedData = JSON.parse(localStorageMock.setItem.mock.calls[0][1])
+      expect(savedData.modifiedOn).toBeDefined()
     })
 
-    it('debe retornar null para extensión no soportada', () => {
-      const file = new File([''], 'test.txt', { type: 'text/plain' })
+    it('debe lanzar error cuando falla el guardado', () => {
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
       
-      const result = ApiDefinitionFileService.getFileFormat(file)
+      const apiDefinition: ApiDefinition = {
+        spec: { test: 'data' }
+      }
       
-      expect(result).toBeNull()
+      expect(() => storageService.save(apiDefinition)).toThrow('Failed to save API definition')
     })
   })
 
   describe('load', () => {
-    it('debe cargar archivo JSON correctamente', async () => {
-      const jsonContent = '{"test": "data"}'
-      const file = new File([jsonContent], 'test.json', { type: 'application/json' })
+    it('debe cargar una API correctamente', () => {
+      const mockData = {
+        spec: { test: 'data' },
+        name: 'Test API',
+        modifiedOn: '2023-01-01T00:00:00.000Z'
+      }
+      localStorageMock.getItem.mockReturnValue(JSON.stringify(mockData))
       
-      const result = await service.load(file)
+      const result = storageService.load()
       
-      expect(result).toEqual({ test: 'data' })
+      expect(result).toEqual({
+        spec: { test: 'data' },
+        name: 'Test API',
+        modifiedOn: expect.any(Date)
+      })
     })
 
-         it('debe cargar archivo YAML correctamente', async () => {
-       // Mock yaml.load para retornar el resultado esperado
-       const yaml = await import('js-yaml')
-       vi.mocked(yaml.load).mockReturnValue({ test: 'data' })
-       
-       // Simular que el archivo se carga correctamente
-       const result = { test: 'data' }
-       
-       expect(result).toEqual({ test: 'data' })
-     })
-
-    it('debe lanzar error para formato no soportado', async () => {
-      const file = new File([''], 'test.txt', { type: 'text/plain' })
+    it('debe retornar null cuando no hay datos', () => {
+      localStorageMock.getItem.mockReturnValue(null)
       
-      await expect(service.load(file)).rejects.toThrow('Formato de archivo no soportado')
+      const result = storageService.load()
+      
+      expect(result).toBeNull()
     })
 
-    it('debe lanzar error cuando falla la lectura del archivo', async () => {
-      const file = new File([''], 'test.json', { type: 'application/json' })
+    it('debe retornar null cuando hay error de parsing', () => {
+      localStorageMock.getItem.mockReturnValue('invalid json')
       
-      // Simular que el archivo existe pero no se puede leer
-      expect(file).toBeDefined()
-      expect(file.name).toBe('test.json')
+      const result = storageService.load()
+      
+      expect(result).toBeNull()
     })
 
-    it('debe lanzar error cuando falla el parsing JSON', async () => {
-      const invalidJson = '{invalid json}'
-      const file = new File([invalidJson], 'test.json', { type: 'application/json' })
+    it('debe manejar datos sin modifiedOn', () => {
+      const mockData = {
+        spec: { test: 'data' }
+      }
+      localStorageMock.getItem.mockReturnValue(JSON.stringify(mockData))
       
-      // Simular que el JSON es inválido
-      expect(file).toBeDefined()
-      expect(invalidJson).toBe('{invalid json}')
-    })
-
-    it('debe lanzar error cuando falla el parsing YAML', async () => {
-      const invalidYaml = 'invalid: yaml: content:'
-      const file = new File([invalidYaml], 'test.yaml', { type: 'text/yaml' })
+      const result = storageService.load()
       
-      // Simular que el parsing falla
-      expect(file).toBeDefined()
-      expect(invalidYaml).toBe('invalid: yaml: content:')
+      expect(result?.modifiedOn).toBeInstanceOf(Date)
     })
   })
 
-  describe('validateOpenApiSpec', () => {
-    it('debe validar OpenAPI 2.0 correctamente', () => {
-      const spec = {
-        swagger: '2.0',
-        info: { title: 'Test API', version: '1.0.0' },
-        paths: {}
+  describe('recover', () => {
+    it('debe recuperar una API correctamente', () => {
+      const mockData = {
+        spec: { test: 'data' },
+        name: 'Test API'
       }
+      localStorageMock.getItem.mockReturnValue(JSON.stringify(mockData))
       
-      const result = service.validateOpenApiSpec(spec)
+      const result = storageService.recover()
       
-      expect(result.isValid).toBe(true)
-      expect(result.errors).toHaveLength(0)
+      expect(result).toEqual({
+        spec: { test: 'data' },
+        name: 'Test API',
+        modifiedOn: expect.any(Date)
+      })
     })
 
-    it('debe validar OpenAPI 3.x correctamente', () => {
-      const spec = {
-        openapi: '3.0.0',
-        info: { title: 'Test API', version: '1.0.0' },
-        paths: {}
-      }
+    it('debe lanzar error cuando no hay API para recuperar', () => {
+      localStorageMock.getItem.mockReturnValue(null)
       
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(true)
-      expect(result.errors).toHaveLength(0)
-    })
-
-    it('debe detectar especificación vacía', () => {
-      const result = service.validateOpenApiSpec(null)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('La especificación está vacía')
-    })
-
-    it('debe detectar especificación que no es objeto', () => {
-      const result = service.validateOpenApiSpec('string')
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('La especificación debe ser un objeto JSON')
-    })
-
-    it('debe detectar OpenAPI 2.0 con versión incorrecta', () => {
-      const spec = {
-        swagger: '1.0',
-        info: { title: 'Test API' },
-        paths: {}
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 2.0: la versión de swagger debe ser "2.0"')
-    })
-
-    it('debe detectar OpenAPI 2.0 sin info', () => {
-      const spec = {
-        swagger: '2.0',
-        paths: {}
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 2.0: Falta la sección info')
-    })
-
-    it('debe detectar OpenAPI 2.0 sin paths', () => {
-      const spec = {
-        swagger: '2.0',
-        info: { title: 'Test API' }
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 2.0: Falta la sección paths')
-    })
-
-    it('debe detectar OpenAPI 3.x con versión incorrecta', () => {
-      const spec = {
-        openapi: '2.0.0',
-        info: { title: 'Test API' },
-        paths: {}
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar OpenAPI 3.x sin info', () => {
-      const spec = {
-        openapi: '3.0.0',
-        paths: {}
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 3.x: Falta la sección info')
-    })
-
-    it('debe detectar OpenAPI 3.x sin paths', () => {
-      const spec = {
-        openapi: '3.0.0',
-        info: { title: 'Test API' }
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('OpenAPI 3.x: Falta la sección paths')
-    })
-
-    it('debe detectar archivo que no es OpenAPI', () => {
-      const spec = {
-        test: 'data',
-        other: 'value'
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain('Los archivos OpenAPI deben tener "swagger" (para 2.0) u "openapi" (para 3.x) como campo raíz')
-    })
-
-    it('debe detectar respuesta HTTP', () => {
-      const spec = {
-        status: 200,
-        message: 'OK'
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar códigos de estado', () => {
-      const spec = {
-        '200': 'OK',
-        '404': 'Not Found'
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar array', () => {
-      const spec = [{ test: 'item1' }, { test: 'item2' }]
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
-    })
-
-    it('debe detectar estructura similar a API', () => {
-      const spec = {
-        paths: {},
-        info: { title: 'Test' }
-      }
-      
-      const result = service.validateOpenApiSpec(spec)
-      
-      expect(result.isValid).toBe(false)
-      expect(result.errors.length).toBeGreaterThan(0)
+      expect(() => storageService.recover()).toThrow('No API definition found to recover')
     })
   })
 
-  describe('toJson', () => {
-    it('debe convertir especificación a JSON', () => {
-      const spec = { test: 'data', number: 123 }
+  describe('clear', () => {
+    it('debe limpiar la API guardada', () => {
+      storageService.clear()
       
-      const result = service.toJson(spec)
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('apicurito-api-definition')
+    })
+
+    it('debe manejar errores al limpiar', () => {
+      localStorageMock.removeItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
       
-      expect(result).toBe('{\n  "test": "data",\n  "number": 123\n}')
+      // No debe lanzar error
+      expect(() => storageService.clear()).not.toThrow()
     })
   })
 
-  describe('toYaml', () => {
-    it('debe convertir especificación a YAML', () => {
-      const spec = { test: 'data', number: 123 }
+  describe('saveForRecovery', () => {
+    it('debe guardar una copia de recuperación', () => {
+      const apiDefinition: ApiDefinition = {
+        spec: { test: 'data' },
+        name: 'Test API'
+      }
       
-      // Verificar que el método existe y es una función
-      expect(typeof service.toYaml).toBe('function')
-      expect(spec).toBeDefined()
+      storageService.saveForRecovery(apiDefinition)
+      
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'apicurito-recovery',
+        expect.stringContaining('"test":"data"')
+      )
+    })
+
+    it('debe agregar savedForRecovery al guardar', () => {
+      const apiDefinition: ApiDefinition = {
+        spec: { test: 'data' }
+      }
+      
+      storageService.saveForRecovery(apiDefinition)
+      
+      const savedData = JSON.parse(localStorageMock.setItem.mock.calls[0][1])
+      expect(savedData.savedForRecovery).toBeDefined()
+    })
+
+    it('debe manejar errores al guardar recuperación', () => {
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
+      
+      const apiDefinition: ApiDefinition = {
+        spec: { test: 'data' }
+      }
+      
+      // No debe lanzar error
+      expect(() => storageService.saveForRecovery(apiDefinition)).not.toThrow()
+    })
+  })
+
+  describe('hasRecoverableApi', () => {
+    it('debe retornar true cuando existe una API de recuperación', () => {
+      localStorageMock.getItem.mockReturnValue('{"spec": {"test": "data"}}')
+      
+      const result = storageService.hasRecoverableApi()
+      
+      expect(result).toBe(true)
+      expect(localStorageMock.getItem).toHaveBeenCalledWith('apicurito-recovery')
+    })
+
+    it('debe retornar false cuando no existe una API de recuperación', () => {
+      localStorageMock.getItem.mockReturnValue(null)
+      
+      const result = storageService.hasRecoverableApi()
+      
+      expect(result).toBe(false)
+    })
+
+    it('debe retornar false cuando hay un error', () => {
+      localStorageMock.getItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
+      
+      const result = storageService.hasRecoverableApi()
+      
+      expect(result).toBe(false)
+    })
+  })
+
+  describe('loadRecovery', () => {
+    it('debe cargar una API de recuperación correctamente', () => {
+      const mockData: RecoveryApiDefinition = {
+        spec: { test: 'data' },
+        name: 'Test API',
+        savedForRecovery: new Date('2023-01-01T00:00:00.000Z')
+      }
+      localStorageMock.getItem.mockReturnValue(JSON.stringify(mockData))
+      
+      const result = storageService.loadRecovery()
+      
+      expect(result).toEqual({
+        spec: { test: 'data' },
+        name: 'Test API',
+        savedForRecovery: expect.any(Date)
+      })
+    })
+
+    it('debe retornar null cuando no hay datos de recuperación', () => {
+      localStorageMock.getItem.mockReturnValue(null)
+      
+      const result = storageService.loadRecovery()
+      
+      expect(result).toBeNull()
+    })
+
+    it('debe retornar null cuando hay error de parsing', () => {
+      localStorageMock.getItem.mockReturnValue('invalid json')
+      
+      const result = storageService.loadRecovery()
+      
+      expect(result).toBeNull()
+    })
+
+    it('debe manejar datos sin savedForRecovery', () => {
+      const mockData: ApiDefinition = {
+        spec: { test: 'data' }
+      }
+      localStorageMock.getItem.mockReturnValue(JSON.stringify(mockData))
+      
+      const result = storageService.loadRecovery()
+      
+      expect(result?.savedForRecovery).toBeInstanceOf(Date)
+    })
+  })
+
+  describe('clearRecovery', () => {
+    it('debe limpiar la API de recuperación', () => {
+      storageService.clearRecovery()
+      
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('apicurito-recovery')
+    })
+
+    it('debe manejar errores al limpiar recuperación', () => {
+      localStorageMock.removeItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
+      
+      // No debe lanzar error
+      expect(() => storageService.clearRecovery()).not.toThrow()
     })
   })
 })
