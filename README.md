@@ -1,239 +1,288 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent} from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import EditorJSLT from '../EditorJSLT'
+import React, { useState, useRef } from 'react';
+import { storageService } from '../services/StorageService';
+import { apiDefinitionFileService, ApiDefinitionFileService } from '../services/ApiDefinitionFileService';
+import type { ApiDefinition } from '../services/StorageService';
+import EditorVisual from './EditorVisual';
+import './DisenoOpenAPI.css';
 
-const mockPrompt = vi.fn()
-const mockConfirm = vi.fn()
-Object.defineProperty(window, 'prompt', { value: mockPrompt, writable: true })
-Object.defineProperty(window, 'confirm', { value: mockConfirm, writable: true })
+// Templates para APIs vacías
+const EMPTY_API_30 = JSON.stringify({
+  openapi: "3.0.2",
+  info: {
+    title: "API Sin Título",
+    version: "1.0.0"
+  },
+  paths: {}
+}, null, 2);
 
-describe('EditorJSLT', () => {
-  let user: ReturnType<typeof userEvent.setup>
+const EMPTY_API_20 = JSON.stringify({
+  swagger: "2.0",
+  info: {
+    title: "API Sin Título",
+    version: "1.0.0"
+  },
+  paths: {}
+}, null, 2);
 
-  beforeEach(() => {
-    user = userEvent.setup()
-    mockPrompt.mockClear()
-    mockConfirm.mockClear()
-  })
+interface DisenoOpenAPIProps {
+  onOpen?: (api: any) => void;
+}
 
-  describe('Renderizado inicial', () => {
-    it('debe renderizar el editor JSLT correctamente', () => {
-      render(<EditorJSLT />)
+const DisenoOpenAPI: React.FC<DisenoOpenAPIProps> = ({}) => {
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentApi, setCurrentApi] = useState<any>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasRecoverableApi = (): boolean => {
+    return storageService.hasRecoverableApi();
+  };
+
+  const recoverApi = (): void => {
+    console.info("[DisenoOpenAPI] Recovering an API definition that was in-progress");
+    try {
+      const recoveredApi = storageService.loadRecovery();
+      if (recoveredApi) {
+        setCurrentApi(recoveredApi.spec);
+        setShowEditor(true);
+        // Limpiar la recuperación después de usarla
+        storageService.clearRecovery();
+      }
+    } catch (error) {
+      console.error('Error recovering API:', error);
+      setError('Error al recuperar la API');
+    }
+  };
+
+  const createNewApi = (version: string = "3.0.2"): void => {
+    setError(null);
+    let api: any;
+    
+    if (version === "2.0") {
+      api = JSON.parse(EMPTY_API_20);
+    } else {
+      api = JSON.parse(EMPTY_API_30);
+    }
+    
+    // Validar la nueva API
+    const validation = apiDefinitionFileService.validateOpenApiSpec(api);
+    if (!validation || !validation.isValid) {
+      const errorMessage = validation?.errors?.join(', ') || 'Error de validación desconocido';
+      setError(`Especificación de API inválida: ${errorMessage}`);
+      return;
+    }
+    
+    // Guardar la nueva API
+    const apiDefinition: ApiDefinition = {
+      spec: api,
+      name: "API Sin Título",
+      createdOn: new Date()
+    };
+    
+    try {
+      storageService.save(apiDefinition);
+      storageService.saveForRecovery(apiDefinition);
       
-      expect(screen.getByText('Editor JSLT')).toBeInTheDocument()
-      expect(screen.getByText('▶ Run')).toBeInTheDocument()
-      expect(screen.getByText('Formatear JSON')).toBeInTheDocument()
-      expect(screen.getByText('Ejemplos')).toBeInTheDocument()
-      expect(screen.getByText('Guardar')).toBeInTheDocument()
-      expect(screen.getByText('Limpiar Todo')).toBeInTheDocument()
-    })
+      setCurrentApi(api);
+      setShowEditor(true);
+    } catch (error) {
+      console.error('Error saving new API:', error);
+      setError('Error al crear nueva API');
+    }
+  };
 
-    it('debe cargar el ejemplo por defecto', () => {
-      render(<EditorJSLT />)
+  const openExistingApi = (): void => {
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const onFileOpened = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    setError(null);
+    const file = event.target.files?.[0];
+    
+    if (!file) return;
+
+    const fileFormat = ApiDefinitionFileService.getFileFormat(file);
+    if (!fileFormat) {
+      setError("Solo se admiten archivos JSON y YAML.");
+      return;
+    }
+
+    loadFile(file);
+  };
+
+  const loadFile = async (file: File): Promise<void> => {
+    setError(null);
+    
+    try {
+      // Usar el nuevo servicio para cargar el archivo
+      const spec = await apiDefinitionFileService.load(file);
       
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      const jsltInput = screen.getByPlaceholderText('Ingresa tu transformación JSLT aquí...')
-
-      expect(jsonInput).toBeInTheDocument()
-      expect(jsltInput).toBeInTheDocument()
-    })
-  })
-
-  describe('Funcionalidad de botones', () => {
-    it('debe ejecutar la transformación JSLT', async () => {
-      render(<EditorJSLT />)
+      // Validar la especificación OpenAPI
+      const validation = apiDefinitionFileService.validateOpenApiSpec(spec);
+      if (!validation || !validation.isValid) {
+        const errorMessage = validation?.errors?.join(', ') || 'Error de validación desconocido';
+        setError(`Especificación OpenAPI inválida: ${errorMessage}`);
+        return;
+      }
       
-      const runButton = screen.getByText('▶ Run')
-      await user.click(runButton)
-
-      // Verificar que se procesó la transformación
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
-      expect(output).toBeInTheDocument()
-    })
-
-    it('debe formatear JSON correctamente', async () => {
-      render(<EditorJSLT />)
+      // Guardar la API cargada
+      const apiDefinition: ApiDefinition = {
+        spec: spec,
+        name: file.name,
+        createdOn: new Date()
+      };
       
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      fireEvent.change(jsonInput, { target: { value: '{"test":"value","number":123}' } })
-
-      const formatButton = screen.getByText('Formatear JSON')
-      await user.click(formatButton)
-
-      // Verificar que se formateó (debería tener espacios y saltos de línea)
-      expect(jsonInput).toBeInTheDocument()
-    })
-
-    it('debe abrir el modal de ejemplos', async () => {
-      render(<EditorJSLT />)
+      storageService.save(apiDefinition);
+      storageService.saveForRecovery(apiDefinition);
       
-      const examplesButton = screen.getByText('Ejemplos')
-      await user.click(examplesButton)
+      setCurrentApi(spec);
+      setShowEditor(true);
+    } catch (e) {
+      console.log(e);
+      setError(e instanceof Error ? e.message : 'Error al cargar archivo');
+    }
+  };
 
-      expect(screen.getByText('Ejemplos de JSLT')).toBeInTheDocument()
-      expect(screen.getByText('Anonimización de IDs')).toBeInTheDocument()
-      expect(screen.getByText('Transformación Simple')).toBeInTheDocument()
-    })
+  const onDragOver = (event: React.DragEvent): void => {
+    if (!dragging) {
+      setDragging(true);
+    }
+    event.preventDefault();
+  };
 
-    it('debe cerrar el modal de ejemplos', async () => {
-      render(<EditorJSLT />)
-      
-      const examplesButton = screen.getByText('Ejemplos')
-      await user.click(examplesButton)
+  const onDrop = async (event: React.DragEvent): Promise<void> => {
+    setDragging(false);
+    event.preventDefault();
 
-      const closeButton = screen.getByText('Cerrar')
-      await user.click(closeButton)
+    const items = event.dataTransfer.items;
+    if (!items || items.length < 1) {
+      return;
+    }
 
-      expect(screen.queryByText('Ejemplos de JSLT')).not.toBeInTheDocument()
-    })
+    const item = items[0];
+    const file = item.getAsFile();
 
-    it('debe limpiar todo el contenido', async () => {
-      render(<EditorJSLT />)
-      
-      const clearButton = screen.getByText('Limpiar Todo')
-      await user.click(clearButton)
+    if (file) {
+      await loadFile(file);
+    } else {
+      setError("Solo se admiten archivos.");
+    }
+  };
 
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      const jsltInput = screen.getByPlaceholderText('Ingresa tu transformación JSLT aquí...')
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
+  const onDragEnd = (): void => {
+    setDragging(false);
+  };
 
-      expect(jsonInput).toHaveValue('')
-      expect(jsltInput).toHaveValue('')
-      expect(output).toHaveValue('')
-    })
-  })
+  const handleBackToWelcome = () => {
+    setShowEditor(false);
+    setCurrentApi(null);
+    setError(null);
+  };
 
-  describe('Modal de ejemplos', () => {
-    it('debe cargar un ejemplo específico', async () => {
-      render(<EditorJSLT />)
-      
-      const examplesButton = screen.getByText('Ejemplos')
-      await user.click(examplesButton)
+  // Si estamos en el editor, mostrar el EditorVisual
+  if (showEditor && currentApi) {
+    return (
+      <div className="diseno-openapi-content">
+        <div className="diseno-openapi-inner editor-mode">
+          <EditorVisual initialApi={currentApi} onBack={handleBackToWelcome} />
+        </div>
+      </div>
+    );
+  }
 
-      // Usar getAllByText y seleccionar el primer botón "Cargar"
-      const loadButtons = screen.getAllByText('Cargar')
-      await user.click(loadButtons[0])
+  // Pantalla de bienvenida
+  return (
+    <div className="diseno-openapi-content">
+      <div className="diseno-openapi-inner">
+        <div 
+          className={`blank-slate-pf ${dragging ? 'dragging' : ''}`}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          onDragEnd={onDragEnd}
+          onDragExit={onDragEnd}
+          onDragLeave={onDragEnd}
+        >
+          <div className="blank-slate-pf-icon">
+            <span className="pficon pficon-add-circle-o"></span>
+          </div>
+          
+          <h1>Diseño de OpenAPI</h1>
+          
+          <p>
+            Crea y edita especificaciones OpenAPI de manera visual e intuitiva. 
+          </p>
+          
+          <p>
+            Comienza creando una nueva API o carga una existente para empezar a trabajar.
+          </p>
+          
+          <div className="blank-slate-pf-main-action">
+            <div className="btn-group">
+              <button 
+                type="button" 
+                className="btn btn-lg btn-primary" 
+                onClick={() => createNewApi()}
+              >
+                Crear Nueva API
+              </button>
+            </div>
+            
+            <span>&nbsp;</span>
+            
+            <button 
+              className="btn btn-default btn-lg btn-load" 
+              onClick={openExistingApi}
+            >
+              Cargar API Existente
+            </button>
 
-      // Verificar que se cargó el ejemplo
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      expect(jsonInput).toBeInTheDocument()
-    })
+            {hasRecoverableApi() && (
+              <div className="recovery-notice">
+                <div className="alert alert-warning">
+                  <span className="pficon pficon-warning-triangle-o"></span>
+                  <strong>¡API en Progreso Detectada!</strong>
+                  <span>&nbsp;</span>
+                  <span>Parece que tienes una API sin terminar.</span>
+                  <span>&nbsp;</span>
+                  <a onClick={recoverApi} className="alert-link">Recuperar mi API</a>
+                </div>
+              </div>
+            )}
 
-    it('debe cerrar el modal después de cargar un ejemplo', async () => {
-      render(<EditorJSLT />)
-      
-      const examplesButton = screen.getByText('Ejemplos')
-      await user.click(examplesButton)
+            <div className="dnd-notification">
+              O arrastra y suelta un archivo sobre la página...
+            </div>
+            
+            {error && (
+              <div>
+                <div className="alert alert-danger">
+                  <span className="pficon pficon-error-circle-o"></span>
+                  <strong>¡Error Detectado!</strong>
+                  <span>&nbsp;</span>
+                  <span>{error}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="hidden">
+            <input 
+              ref={fileInputRef}
+              type="file" 
+              id="load-file" 
+              name="load-file" 
+              onChange={onFileOpened}
+              accept=".json,.yaml,.yml"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-      const loadButtons = screen.getAllByText('Cargar')
-      await user.click(loadButtons[0])
-
-      expect(screen.queryByText('Ejemplos de JSLT')).not.toBeInTheDocument()
-    })
-  })
-
-  describe('Funcionalidad de guardado', () => {
-    it('debe guardar una transformación', async () => {
-      mockPrompt.mockReturnValue('mi-transformacion')
-      mockConfirm.mockReturnValue(true)
-      
-      render(<EditorJSLT />)
-      
-      const saveButton = screen.getByText('Guardar')
-      await user.click(saveButton)
-
-      expect(mockPrompt).toHaveBeenCalledWith('Nombre para guardar esta transformación:')
-    })
-  })
-
-  describe('Validación de JSON', () => {
-    it('debe mostrar error con JSON inválido', async () => {
-      render(<EditorJSLT />)
-      
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      fireEvent.change(jsonInput, { target: { value: '{"invalid": json}' } })
-
-      const runButton = screen.getByText('▶ Run')
-      await user.click(runButton)
-
-      // Verificar que se muestra un error
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
-      expect(output).toHaveValue('')
-    })
-
-    it('debe procesar JSON válido correctamente', async () => {
-      render(<EditorJSLT />)
-      
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      fireEvent.change(jsonInput, { target: { value: '{"test": "value"}' } })
-
-      const runButton = screen.getByText('▶ Run')
-      await user.click(runButton)
-
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
-      expect(output).toBeInTheDocument()
-    })
-  })
-
-  describe('Interacción con textareas', () => {
-    it('debe permitir editar JSON', async () => {
-      render(<EditorJSLT />)
-      
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      fireEvent.change(jsonInput, { target: { value: '{"nuevo": "valor"}' } })
-
-      expect(jsonInput).toHaveValue('{"nuevo": "valor"}')
-    })
-
-    it('debe permitir editar JSLT', async () => {
-      render(<EditorJSLT />)
-      
-      const jsltInput = screen.getByPlaceholderText('Ingresa tu transformación JSLT aquí...')
-      fireEvent.change(jsltInput, { target: { value: 'let nueva = .campo' } })
-
-      expect(jsltInput).toHaveValue('let nueva = .campo')
-    })
-
-    it('debe actualizar el output automáticamente', async () => {
-      render(<EditorJSLT />)
-      
-      const jsonInput = screen.getByPlaceholderText('Ingresa tu JSON de entrada aquí...')
-      fireEvent.change(jsonInput, { target: { value: '{"test": "data"}' } })
-
-      const runButton = screen.getByText('▶ Run')
-      await user.click(runButton)
-
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
-      expect(output).toBeInTheDocument()
-    })
-  })
-
-  describe('Manejo de errores', () => {
-    it('debe manejar errores de transformación', async () => {
-      render(<EditorJSLT />)
-      
-      const jsltInput = screen.getByPlaceholderText('Ingresa tu transformación JSLT aquí...')
-      fireEvent.change(jsltInput, { target: { value: 'invalid jslt syntax' } })
-
-      const runButton = screen.getByText('▶ Run')
-      await user.click(runButton)
-
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
-      expect(output).toBeInTheDocument()
-    })
-
-    it('debe limpiar errores al ejecutar exitosamente', async () => {
-      render(<EditorJSLT />)
-      
-      const jsltInput = screen.getByPlaceholderText('Ingresa tu transformación JSLT aquí...')
-      fireEvent.change(jsltInput, { target: { value: 'let test = .test' } })
-
-      const runButton = screen.getByText('▶ Run')
-      await user.click(runButton)
-
-      const output = screen.getByPlaceholderText('El resultado de la transformación aparecerá aquí...')
-      expect(output).toBeInTheDocument()
-    })
-  })
-})
+export default DisenoOpenAPI; 
