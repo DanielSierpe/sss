@@ -14,3 +14,6 @@ const DetectUrl: React.FC = () => {
 };
 
 export default DetectUrl;
+
+
+https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/?code=6XQ1XpoaLzUK3M4LxXDtIIo1eqsJf8c6
