@@ -1,67 +1,212 @@
-import React from 'react';
-import { useAuthContext } from '../contexts/AuthContext';
-import './Generador.css';
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { render, screen} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import Generador from '../Generador'
+import { AuthProvider } from '../../contexts/AuthContext'
 
-const Generador: React.FC = () => {
-  const { isAuthenticated, token, isLoading } = useAuthContext();
+// Mock del contexto de autenticación
+vi.mock('../../contexts/AuthContext', async () => {
+  const actual = await vi.importActual('../../contexts/AuthContext')
+  return {
+    ...actual,
+    useAuthContext: () => ({
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+      token: null,
+      handleAuthCode: vi.fn(),
+      logout: vi.fn(),
+    }),
+  }
+})
 
-  return (
-    <div className="generador-content">
-      <div className="generador-inner">
-        <h2>Validación de Estructura</h2>
-        
-                 {/* Información de autenticación */}
-         <div className="auth-info" style={{ 
-           background: '#f8f9fa', 
-           padding: '16px', 
-           borderRadius: '8px', 
-           marginBottom: '24px',
-           border: '1px solid #e9ecef'
-         }}>
-           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
-             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
-             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
-           </div>
-         </div>
-        
-        <form className="generador-form" autoComplete="off">
-          <div className="form-group">
-            <label htmlFor="openapi-name">Nombre openAPI</label>
-            <input
-              type="text"
-              id="openapi-name"
-              name="openapi-name"
-              placeholder="buscar"
-              className="search-input"
-              autoComplete="off"
-            />
-          </div>
-          <div className="button-group">
-            <button type="button" className="btn validar">Validar</button>
-            <button type="button" className="btn generar">Generar componente</button>
-          </div>
-        </form>
-        <div className="tabla-container">
-          <table className="tabla-generador">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>path</th>
-                <th>Message</th>
-                <th>Severity</th>
-                <th>range</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Los datos se llenarán dinámicamente desde la API */}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Wrapper para envolver componentes con AuthProvider
+const renderWithAuth = (component: React.ReactElement) => {
+  return render(
+    <AuthProvider>
+      {component}
+    </AuthProvider>
+  )
+}
 
-export default Generador; 
+describe('Generador', () => {
+  let user: ReturnType<typeof userEvent.setup>
+
+  beforeEach(() => {
+    user = userEvent.setup()
+  })
+
+  describe('Renderizado inicial', () => {
+    it('debe renderizar el componente Generador correctamente', () => {
+      renderWithAuth(<Generador />)
+      
+      expect(screen.getByText('Validación de Estructura')).toBeInTheDocument()
+      expect(screen.getByText('Nombre openAPI')).toBeInTheDocument()
+      expect(screen.getByText('Validar')).toBeInTheDocument()
+      expect(screen.getByText('Generar componente')).toBeInTheDocument()
+    })
+
+    it('debe mostrar la tabla con las columnas correctas', () => {
+      renderWithAuth(<Generador />)
+      
+      expect(screen.getByText('Code')).toBeInTheDocument()
+      expect(screen.getByText('path')).toBeInTheDocument()
+      expect(screen.getByText('Message')).toBeInTheDocument()
+      expect(screen.getByText('Severity')).toBeInTheDocument()
+      expect(screen.getByText('range')).toBeInTheDocument()
+    })
+
+    it('debe mostrar el input de búsqueda', () => {
+      renderWithAuth(<Generador />)
+      
+      const searchInput = screen.getByPlaceholderText('buscar')
+      expect(searchInput).toBeInTheDocument()
+      expect(searchInput).toHaveAttribute('type', 'text')
+      expect(searchInput).toHaveAttribute('id', 'openapi-name')
+    })
+  })
+
+  describe('Funcionalidad de formulario', () => {
+    it('debe permitir escribir en el input de búsqueda', async () => {
+      renderWithAuth(<Generador />)
+      
+      const searchInput = screen.getByPlaceholderText('buscar')
+      await user.type(searchInput, 'mi-api')
+      
+      expect(searchInput).toHaveValue('mi-api')
+    })
+
+    it('debe tener el botón de validar', () => {
+      renderWithAuth(<Generador />)
+      
+      const validateButton = screen.getByText('Validar')
+      expect(validateButton).toBeInTheDocument()
+      expect(validateButton).toHaveClass('btn', 'validar')
+    })
+
+    it('debe tener el botón de generar componente', () => {
+      renderWithAuth(<Generador />)
+      
+      const generateButton = screen.getByText('Generar componente')
+      expect(generateButton).toBeInTheDocument()
+      expect(generateButton).toHaveClass('btn', 'generar')
+    })
+  })
+
+  describe('Interacción con botones', () => {
+    it('debe manejar el clic en el botón validar', async () => {
+      renderWithAuth(<Generador />)
+      
+      const validateButton = screen.getByText('Validar')
+      await user.click(validateButton)
+      
+      // El botón debería ser clickeable
+      expect(validateButton).toBeInTheDocument()
+    })
+
+    it('debe manejar el clic en el botón generar', async () => {
+      renderWithAuth(<Generador />)
+      
+      const generateButton = screen.getByText('Generar componente')
+      await user.click(generateButton)
+      
+      // El botón debería ser clickeable
+      expect(generateButton).toBeInTheDocument()
+    })
+  })
+
+  describe('Estructura del formulario', () => {
+    it('debe tener la estructura de formulario correcta', () => {
+      renderWithAuth(<Generador />)
+      
+      const form = document.querySelector('form')
+      expect(form).toBeInTheDocument()
+      expect(form).toHaveClass('generador-form')
+    })
+
+    it('debe tener el grupo de botones', () => {
+      renderWithAuth(<Generador />)
+      
+      const buttonGroup = document.querySelector('.button-group')
+      expect(buttonGroup).toBeInTheDocument()
+    })
+
+    it('debe tener el grupo de formulario', () => {
+      renderWithAuth(<Generador />)
+      
+      const formGroup = document.querySelector('.form-group')
+      expect(formGroup).toBeInTheDocument()
+    })
+  })
+
+  describe('Estructura de la tabla', () => {
+    it('debe tener el contenedor de tabla', () => {
+      renderWithAuth(<Generador />)
+      
+      const tableContainer = document.querySelector('.tabla-container')
+      expect(tableContainer).toBeInTheDocument()
+    })
+
+    it('debe tener la tabla con la clase correcta', () => {
+      renderWithAuth(<Generador />)
+      
+      const table = document.querySelector('.tabla-generador')
+      expect(table).toBeInTheDocument()
+    })
+
+    it('debe tener el encabezado de tabla', () => {
+      renderWithAuth(<Generador />)
+      
+      const thead = document.querySelector('thead')
+      expect(thead).toBeInTheDocument()
+    })
+
+    it('debe tener el cuerpo de tabla', () => {
+      renderWithAuth(<Generador />)
+      
+      const tbody = document.querySelector('tbody')
+      expect(tbody).toBeInTheDocument()
+    })
+  })
+
+  describe('Accesibilidad', () => {
+    it('debe tener labels asociados correctamente', () => {
+      renderWithAuth(<Generador />)
+      
+      const label = screen.getByText('Nombre openAPI')
+      const input = screen.getByPlaceholderText('buscar')
+      
+      expect(label).toHaveAttribute('for', 'openapi-name')
+      expect(input).toHaveAttribute('id', 'openapi-name')
+    })
+
+    it('debe tener autocomplete deshabilitado', () => {
+      renderWithAuth(<Generador />)
+      
+      const form = document.querySelector('form')
+      const input = screen.getByPlaceholderText('buscar')
+      
+      expect(form).toHaveAttribute('autoComplete', 'off')
+      expect(input).toHaveAttribute('autoComplete', 'off')
+    })
+  })
+
+  describe('Estilos y clases CSS', () => {
+    it('debe tener las clases CSS principales', () => {
+      renderWithAuth(<Generador />)
+      
+      const container = document.querySelector('.generador-content')
+      const inner = document.querySelector('.generador-inner')
+      
+      expect(container).toBeInTheDocument()
+      expect(inner).toBeInTheDocument()
+    })
+
+    it('debe tener el input con la clase search-input', () => {
+      renderWithAuth(<Generador />)
+      
+      const input = screen.getByPlaceholderText('buscar')
+      expect(input).toHaveClass('search-input')
+    })
+  })
+})
