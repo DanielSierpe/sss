@@ -1,36 +1,36 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import Dashboard from './pages/Dashboard';
-import Generador from './pages/Generador';
-import DisenoOpenAPI from './pages/DisenoOpenAPI';
-import EditorJSLT from './pages/EditorJSLT';
-import EditorXSLT from './pages/EditorXSLT';
+import React, { createContext, useContext } from 'react';
+import type { ReactNode } from 'react';
+import { useAuth } from '../hooks/useAuth';
 
-import './App.css';
-
-function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <div className="app-container">
-          <Header />
-          <div className="main-layout">
-            <Sidebar />
-            <main className="main-content">
-                          <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/generador" element={<Generador />} />
-              <Route path="/diseno-openapi" element={<DisenoOpenAPI />} />
-              <Route path="/editor-jslt" element={<EditorJSLT />} />
-              <Route path="/editor-xslt" element={<EditorXSLT />} />
-            </Routes>
-            </main>
-          </div>
-        </div>
-      </BrowserRouter>
-    </AuthProvider>
-  );
+interface AuthContextType {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  token: string | null;
+  handleAuthCode: (code: string) => Promise<void>;
+  logout: () => void;
 }
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const auth = useAuth();
+
+  return (
+    <AuthContext.Provider value={auth}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuthContext = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuthContext debe ser usado dentro de un AuthProvider');
+  }
+  return context;
+};
