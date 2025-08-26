@@ -1,103 +1,91 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import AuthService from '../AuthService';
+import { useEffect, useState } from 'react';
+import AuthService from '../services/AuthService';
 
-// Mock de localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
+interface UseAuthReturn {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  token: string | null;
+  handleAuthCode: (code: string) => Promise<void>;
+  logout: () => void;
+}
+
+export const useAuth = (): UseAuthReturn => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  // Verificar autenticación al cargar
+  useEffect(() => {
+    const checkAuth = () => {
+      const isAuth = AuthService.isAuthenticated();
+      const storedToken = AuthService.getStoredToken();
+      
+      setIsAuthenticated(isAuth);
+      setToken(storedToken);
+    };
+
+    checkAuth();
+  }, []);
+
+  // Detectar código de autorización en la URL
+  useEffect(() => {
+    const detectAuthCode = async () => {
+      try {
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+        
+        if (code) {
+          console.log('Código de autorización detectado:', code);
+          await handleAuthCode(code);
+          
+          // Limpiar la URL después de procesar el código
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('code');
+          window.history.replaceState({}, document.title, newUrl.pathname + newUrl.search);
+        }
+      } catch (error) {
+        console.error('Error al detectar código de autorización:', error);
+        setError('Error al procesar la autenticación');
+      }
+    };
+
+    detectAuthCode();
+  }, []);
+
+  const handleAuthCode = async (code: string): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const tokenData = await AuthService.getJWTToken(code);
+      setIsAuthenticated(true);
+      setToken(tokenData.access_token);
+      console.log('Token obtenido exitosamente');
+    } catch (error) {
+      console.error('Error al obtener token:', error);
+      setError(error instanceof Error ? error.message : 'Error al obtener el token');
+      setIsAuthenticated(false);
+      setToken(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = (): void => {
+    AuthService.clearTokens();
+    setIsAuthenticated(false);
+    setToken(null);
+    setError(null);
+  };
+
+  return {
+    isAuthenticated,
+    isLoading,
+    error,
+    token,
+    handleAuthCode,
+    logout
+  };
 };
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
-
-// Mock de fetch
-vi.stubGlobal('fetch', vi.fn());
-
-describe('AuthService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('getStoredToken', () => {
-    it('debería retornar el token almacenado', () => {
-      localStorageMock.getItem.mockReturnValue('stored-token');
-      
-      const result = AuthService.getStoredToken();
-      
-      expect(localStorageMock.getItem).toHaveBeenCalledWith('access_token');
-      expect(result).toBe('stored-token');
-    });
-
-    it('debería retornar null si no hay token', () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      
-      const result = AuthService.getStoredToken();
-      
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('clearTokens', () => {
-    it('debería limpiar todos los tokens del localStorage', () => {
-      AuthService.clearTokens();
-      
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_type');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_in');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_at');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
-    });
-  });
-
-  describe('isTokenExpired', () => {
-    it('debería retornar true si no hay fecha de expiración', () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      
-      const result = AuthService.isTokenExpired();
-      
-      expect(result).toBe(true);
-    });
-
-    it('debería retornar true si el token está expirado', () => {
-      const pastTime = new Date().getTime() - 1000;
-      localStorageMock.getItem.mockReturnValue(pastTime.toString());
-      
-      const result = AuthService.isTokenExpired();
-      
-      expect(result).toBe(true);
-    });
-
-    it('debería retornar false si el token no está expirado', () => {
-      const futureTime = new Date().getTime() + 1000000;
-      localStorageMock.getItem.mockReturnValue(futureTime.toString());
-      
-      const result = AuthService.isTokenExpired();
-      
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('isAuthenticated', () => {
-    it('debería retornar true si hay token válido', () => {
-      const futureTime = new Date().getTime() + 1000000;
-      localStorageMock.getItem
-        .mockReturnValueOnce('test-token')
-        .mockReturnValueOnce(futureTime.toString());
-      
-      const result = AuthService.isAuthenticated();
-      
-      expect(result).toBe(true);
-    });
-
-    it('debería retornar false si no hay token', () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      
-      const result = AuthService.isAuthenticated();
-      
-      expect(result).toBe(false);
-    });
-  });
-});
