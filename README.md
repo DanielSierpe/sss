@@ -1,293 +1,67 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import HttpService from '../HttpService';
-import AuthService from '../AuthService';
+import React from 'react';
+import { useAuthContext } from '../contexts/AuthContext';
+import './Generador.css';
 
-// Mock del AuthService
-vi.mock('../AuthService');
+const Generador: React.FC = () => {
+  const { isAuthenticated, token, isLoading } = useAuthContext();
 
-// Mock de fetch
-vi.stubGlobal('fetch', vi.fn());
+  return (
+    <div className="generador-content">
+      <div className="generador-inner">
+        <h2>Validación de Estructura</h2>
+        
+                 {/* Información de autenticación */}
+         <div className="auth-info" style={{ 
+           background: '#f8f9fa', 
+           padding: '16px', 
+           borderRadius: '8px', 
+           marginBottom: '24px',
+           border: '1px solid #e9ecef'
+         }}>
+           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
+             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
+             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
+           </div>
+         </div>
+        
+        <form className="generador-form" autoComplete="off">
+          <div className="form-group">
+            <label htmlFor="openapi-name">Nombre openAPI</label>
+            <input
+              type="text"
+              id="openapi-name"
+              name="openapi-name"
+              placeholder="buscar"
+              className="search-input"
+              autoComplete="off"
+            />
+          </div>
+          <div className="button-group">
+            <button type="button" className="btn validar">Validar</button>
+            <button type="button" className="btn generar">Generar componente</button>
+          </div>
+        </form>
+        <div className="tabla-container">
+          <table className="tabla-generador">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>path</th>
+                <th>Message</th>
+                <th>Severity</th>
+                <th>range</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Los datos se llenarán dinámicamente desde la API */}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-// Mock de window.location
-Object.defineProperty(window, 'location', {
-  value: {
-    href: 'https://dss-login-webtools-ui-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/',
-  },
-  writable: true,
-});
-
-describe('HttpService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (AuthService.getAuthHeader as any).mockReturnValue('Bearer test-token');
-  });
-
-  describe('request', () => {
-    it('debería hacer una petición GET exitosa', async () => {
-      const mockResponse = { data: 'test' };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.request('/test-endpoint', { method: 'GET' });
-
-      expect(fetch).toHaveBeenCalledWith('/test-endpoint', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('debería hacer una petición POST con body', async () => {
-      const mockResponse = { success: true };
-      const requestBody = { name: 'test' };
-      
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.request('/test-endpoint', {
-        method: 'POST',
-        body: requestBody,
-      });
-
-      expect(fetch).toHaveBeenCalledWith('/test-endpoint', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('debería hacer una petición sin autenticación', async () => {
-      const mockResponse = { public: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.request('/public-endpoint', {
-        method: 'GET',
-        includeAuth: false,
-      });
-
-      expect(fetch).toHaveBeenCalledWith('/public-endpoint', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('debería manejar respuestas vacías', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => '',
-      });
-
-      const result = await HttpService.request('/empty-endpoint');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería redirigir al login si recibe 401', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-      });
-
-      await expect(HttpService.request('/protected-endpoint')).rejects.toThrow('Token expirado. Redirigiendo al login...');
-      expect(AuthService.clearTokens).toHaveBeenCalled();
-    });
-
-    it('debería manejar otros errores HTTP', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      });
-
-      await expect(HttpService.request('/error-endpoint')).rejects.toThrow('HTTP error! status: 500 - Internal Server Error');
-    });
-
-    it('debería manejar errores de red', async () => {
-      (fetch as any).mockRejectedValueOnce(new Error('Network error'));
-
-      await expect(HttpService.request('/network-error')).rejects.toThrow('Network error');
-    });
-  });
-
-  describe('get', () => {
-    it('debería hacer una petición GET', async () => {
-      const mockResponse = { data: 'get-test' };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.get('/get-endpoint');
-
-      expect(fetch).toHaveBeenCalledWith('/get-endpoint', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('post', () => {
-    it('debería hacer una petición POST', async () => {
-      const mockResponse = { success: true };
-      const requestBody = { name: 'post-test' };
-      
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.post('/post-endpoint', requestBody);
-
-      expect(fetch).toHaveBeenCalledWith('/post-endpoint', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('put', () => {
-    it('debería hacer una petición PUT', async () => {
-      const mockResponse = { updated: true };
-      const requestBody = { name: 'put-test' };
-      
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.put('/put-endpoint', requestBody);
-
-      expect(fetch).toHaveBeenCalledWith('/put-endpoint', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('delete', () => {
-    it('debería hacer una petición DELETE', async () => {
-      const mockResponse = { deleted: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.delete('/delete-endpoint');
-
-      expect(fetch).toHaveBeenCalledWith('/delete-endpoint', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('patch', () => {
-    it('debería hacer una petición PATCH', async () => {
-      const mockResponse = { patched: true };
-      const requestBody = { name: 'patch-test' };
-      
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.patch('/patch-endpoint', requestBody);
-
-      expect(fetch).toHaveBeenCalledWith('/patch-endpoint', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('requestWithoutAuth', () => {
-    it('debería hacer una petición sin autenticación', async () => {
-      const mockResponse = { public: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.requestWithoutAuth('/public-endpoint');
-
-      expect(fetch).toHaveBeenCalledWith('/public-endpoint', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('manejo de headers personalizados', () => {
-    it('debería incluir headers personalizados', async () => {
-      const mockResponse = { custom: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const customHeaders = {
-        'X-Custom-Header': 'custom-value',
-        'Accept': 'application/xml',
-      };
-
-      await HttpService.request('/custom-endpoint', {
-        method: 'GET',
-        headers: customHeaders,
-      });
-
-      expect(fetch).toHaveBeenCalledWith('/custom-endpoint', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer test-token',
-          'X-Custom-Header': 'custom-value',
-          'Accept': 'application/xml',
-        },
-      });
-    });
-  });
-});
+export default Generador; 
