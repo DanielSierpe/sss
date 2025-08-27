@@ -1,40 +1,17 @@
-import React from 'react';
-import { useAuthContext } from '../contexts/AuthContext';
-import './Header.css';
+# Variables de entorno para autenticación OAuth
+# Copia este archivo como .env y configura los valores reales para tu entorno
 
-const Header: React.FC = () => {
-  const { isAuthenticated, isLoading, error, logout } = useAuthContext();
+# Endpoint para obtener el token JWT (auth_code)
+VITE_JWT_ENDPOINT=https://ssm.hcloud.cl.bsch/oauth/token
 
-  const handleLogout = () => {
-    logout();
-    const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://dss-login-webtools-ui-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/';
-    
-    window.location.href = loginUrl;
-  };
+# Endpoint para renovar el token (refresh_token)
+VITE_REFRESH_ENDPOINT=https://ssm.dcloud.cl.bsch/oauth/token
 
-  return (
-    <header className="app-header">
-      <img src="/santander.png" alt="Logo" className="logo" />
-      <span className="header-title"></span>
-      
-             {/* Estado de autenticación */}
-       <div className="auth-status">
-         {isLoading && <span className="auth-loading">Autenticando...</span>}
-         {error && <span className="auth-error">Error: {error}</span>}
-         {isAuthenticated && <span className="auth-success">Autenticado</span>}
-         {!isAuthenticated && !isLoading && <span className="auth-pending">No autenticado</span>}
-       </div>
-      
-      <button className="logout-btn" onClick={handleLogout}>
-        <svg className="logout-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M16 17L21 12L16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        Log Out
-      </button>
-    </header>
-  );
-};
+# URI de redirección después de la autenticación
+VITE_REDIRECT_URI=https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/
 
-export default Header; 
+# URL del portal de login
+VITE_LOGIN_URL=https://dss-login-webtools-ui-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/
+
+# ID del cliente OAuth
+VITE_CLIENT_ID=webtools
