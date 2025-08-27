@@ -1,186 +1,144 @@
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
+import AuthService from './AuthService';
+
+interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  headers?: Record<string, string>;
+  body?: any;
+  includeAuth?: boolean;
 }
 
-class AuthService {
-  private readonly JWT_ENDPOINT = import.meta.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch/oauth/token';
-  private readonly REFRESH_ENDPOINT = import.meta.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch/oauth/token';
-  private readonly REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI || 'https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/';
-  private readonly CLIENT_ID = import.meta.env.VITE_CLIENT_ID || 'webtools';
+class HttpService {
+  private baseURL: string = '';
+
+  constructor(baseURL?: string) {
+    this.baseURL = baseURL || '';
+  }
 
   /**
-   * Obtiene el token JWT usando el código de autorización
+   * Realiza una petición HTTP con autenticación automática
    */
-  async getJWTToken(code: string): Promise<TokenResponse> {
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: this.REDIRECT_URI
-    });
+  async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    const {
+      method = 'GET',
+      headers = {},
+      body,
+      includeAuth = true
+    } = options;
+
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...headers
+    };
+
+    // Agregar token de autenticación si está disponible y se requiere
+    if (includeAuth) {
+      const validToken = await AuthService.getValidToken();
+      if (validToken) {
+        const tokenType = localStorage.getItem('token_type') || 'Bearer';
+        requestHeaders['Authorization'] = `${tokenType} ${validToken}`;
+      }
+    }
+
+    const config: RequestInit = {
+      method,
+      headers: requestHeaders,
+    };
+
+    if (body && method !== 'GET') {
+      config.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
 
     try {
-      const response = await fetch(`${this.JWT_ENDPOINT}?${params.toString()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'true-client-ip': '0.0.0.0',
-          'oauth_type': 'iam'
-        },
-        // Autenticación básica
-        credentials: 'include'
-      });
+      const response = await fetch(url, config);
 
-      if (!response.ok) {
-        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
+      // Si el token expiró, intentar renovarlo automáticamente
+      if (response.status === 401 && includeAuth) {
+        console.log('Token expirado, intentando renovar...');
+        const refreshedToken = await AuthService.refreshToken();
+        
+        if (refreshedToken) {
+          // Reintentar la petición con el nuevo token
+          const newTokenType = localStorage.getItem('token_type') || 'Bearer';
+          requestHeaders['Authorization'] = `${newTokenType} ${refreshedToken.access_token}`;
+          
+          const retryResponse = await fetch(url, {
+            ...config,
+            headers: requestHeaders
+          });
+          
+          if (retryResponse.ok) {
+            const text = await retryResponse.text();
+            return text ? JSON.parse(text) as T : null as T;
+          }
+        }
+        
+        // Si no se pudo renovar, limpiar tokens y redirigir al login
+        AuthService.clearTokens();
+        const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://dss-login-webtools-ui-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/';
+        window.location.href = loginUrl;
+        throw new Error('Token expirado y no se pudo renovar. Redirigiendo al login...');
       }
 
-      const tokenData: TokenResponse = await response.json();
-      
-      // Guardar el token en localStorage
-      this.saveToken(tokenData);
-      
-      return tokenData;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+      }
+
+      // Si la respuesta es vacía, retornar null
+      const text = await response.text();
+      if (!text) {
+        return null as T;
+      }
+
+      return JSON.parse(text) as T;
     } catch (error) {
-      console.error('Error al obtener el token JWT:', error);
+      console.error('Error en petición HTTP:', error);
       throw error;
     }
   }
 
   /**
-   * Renueva el token usando el refresh token
+   * Método GET
    */
-  async refreshToken(): Promise<TokenResponse | null> {
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      console.warn('No hay refresh token disponible');
-      return null;
-    }
-
-    const params = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: this.CLIENT_ID,
-      refresh_token: refreshToken
-    });
-
-    try {
-      const currentToken = this.getStoredToken();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'oauth_type': 'iam'
-      };
-
-      // Agregar el token actual como Bearer si existe
-      if (currentToken) {
-        headers['authorization'] = `Bearer ${currentToken}`;
-      }
-
-      const response = await fetch(`${this.REFRESH_ENDPOINT}?${params.toString()}`, {
-        method: 'POST',
-        headers
-      });
-
-      if (!response.ok) {
-        console.error(`Error al renovar token: ${response.status} ${response.statusText}`);
-        // Si falla el refresh, limpiar tokens
-        this.clearTokens();
-        return null;
-      }
-
-      const tokenData: TokenResponse = await response.json();
-      
-      // Guardar el nuevo token
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al renovar el token:', error);
-      this.clearTokens();
-      return null;
-    }
+  async get<T>(endpoint: string, options?: Omit<RequestOptions, 'method'>): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
 
   /**
-   * Guarda el token en localStorage
+   * Método POST
    */
-  private saveToken(tokenData: TokenResponse): void {
-    localStorage.setItem('access_token', tokenData.access_token);
-    localStorage.setItem('token_type', tokenData.token_type);
-    localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
-    
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token);
-    }
-    
-    // Guardar la fecha de expiración
-    const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
-    localStorage.setItem('token_expires_at', expiresAt.toString());
+  async post<T>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'POST', body });
   }
 
   /**
-   * Obtiene el token almacenado
+   * Método PUT
    */
-  getStoredToken(): string | null {
-    return localStorage.getItem('access_token');
+  async put<T>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'PUT', body });
   }
 
   /**
-   * Verifica si el token está expirado
+   * Método DELETE
    */
-  isTokenExpired(): boolean {
-    const expiresAt = localStorage.getItem('token_expires_at');
-    if (!expiresAt) return true;
-    
-    return new Date().getTime() > parseInt(expiresAt);
+  async delete<T>(endpoint: string, options?: Omit<RequestOptions, 'method'>): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 
   /**
-   * Obtiene el token con el tipo para usar en headers
+   * Método PATCH
    */
-  getAuthHeader(): string | null {
-    const token = this.getStoredToken();
-    const tokenType = localStorage.getItem('token_type') || 'Bearer';
-    
-    if (!token || this.isTokenExpired()) {
-      return null;
-    }
-    
-    return `${tokenType} ${token}`;
+  async patch<T>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'PATCH', body });
   }
 
   /**
-   * Obtiene el token con renovación automática si es necesario
+   * Petición sin autenticación (para login, etc.)
    */
-  async getValidToken(): Promise<string | null> {
-    if (!this.isTokenExpired()) {
-      return this.getStoredToken();
-    }
-
-    // Token expirado, intentar renovar
-    const refreshedToken = await this.refreshToken();
-    return refreshedToken ? refreshedToken.access_token : null;
-  }
-
-  /**
-   * Limpia todos los tokens almacenados
-   */
-  clearTokens(): void {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token_type');
-    localStorage.removeItem('token_expires_in');
-    localStorage.removeItem('token_expires_at');
-    localStorage.removeItem('refresh_token');
-  }
-
-  /**
-   * Verifica si el usuario está autenticado
-   */
-  isAuthenticated(): boolean {
-    const token = this.getStoredToken();
-    return token !== null && !this.isTokenExpired();
+  async requestWithoutAuth<T>(endpoint: string, options?: Omit<RequestOptions, 'includeAuth'>): Promise<T> {
+    return this.request<T>(endpoint, { ...options, includeAuth: false });
   }
 }
 
-export default new AuthService();
+export default new HttpService();
