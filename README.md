@@ -1,212 +1,71 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen} from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import Generador from '../Generador'
-import { AuthProvider } from '../../contexts/AuthContext'
+{
+          "type": "http",
+          "name": "1 - GET JWT Token From Auth_Code",
+          "seq": 1,
+          "request": {
+            "url": "https://ssm.dcloud.cl.bsch/oauth/token?grant_type=authorization_code&code=Zp2l1pM4CZ8lIy3owQIPeEfcrjg2CKP5&redirect_uri=https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/",
+            "method": "POST",
+            "headers": [
+              {
+                "name": "content-type",
+                "value": "application/x-www-form-urlencoded",
+                "enabled": true
+              },
+              {
+                "name": "true-client-ip",
+                "value": "0.0.0.0",
+                "enabled": true
+              },
+              {
+                "name": "oauth_type",
+                "value": "iam",
+                "enabled": true
+              }
+            ],
+            "params": [
+              {
+                "name": "grant_type",
+                "value": "authorization_code",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "code",
+                "value": "Zp2l1pM4CZ8lIy3owQIPeEfcrjg2CKP5",
+                "type": "query",
+                "enabled": true
+              },
+              {
+                "name": "redirect_uri",
+                "value": "https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/",
+                "type": "query",
+                "enabled": true
+              }
+            ],
+            "body": {
+              "mode": "none",
+              "formUrlEncoded": [],
+              "multipartForm": []
+            },
+            "script": {},
+            "vars": {},
+            "assertions": [],
+            "tests": "",
+            "auth": {
+              "mode": "basic",
+              "basic": {
+                "username": "webtools",
+                "password": "webtools"
+              }
+            }
+          }
+        },
 
-// Mock del contexto de autenticación
-vi.mock('../../contexts/AuthContext', async () => {
-  const actual = await vi.importActual('../../contexts/AuthContext')
-  return {
-    ...actual,
-    useAuthContext: () => ({
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
-      token: null,
-      handleAuthCode: vi.fn(),
-      logout: vi.fn(),
-    }),
-  }
-})
 
-// Wrapper para envolver componentes con AuthProvider
-const renderWithAuth = (component: React.ReactElement) => {
-  return render(
-    <AuthProvider>
-      {component}
-    </AuthProvider>
-  )
-}
 
-describe('Generador', () => {
-  let user: ReturnType<typeof userEvent.setup>
 
-  beforeEach(() => {
-    user = userEvent.setup()
-  })
-
-  describe('Renderizado inicial', () => {
-    it('debe renderizar el componente Generador correctamente', () => {
-      renderWithAuth(<Generador />)
-      
-      expect(screen.getByText('Validación de Estructura')).toBeInTheDocument()
-      expect(screen.getByText('Nombre openAPI')).toBeInTheDocument()
-      expect(screen.getByText('Validar')).toBeInTheDocument()
-      expect(screen.getByText('Generar componente')).toBeInTheDocument()
-    })
-
-    it('debe mostrar la tabla con las columnas correctas', () => {
-      renderWithAuth(<Generador />)
-      
-      expect(screen.getByText('Code')).toBeInTheDocument()
-      expect(screen.getByText('path')).toBeInTheDocument()
-      expect(screen.getByText('Message')).toBeInTheDocument()
-      expect(screen.getByText('Severity')).toBeInTheDocument()
-      expect(screen.getByText('range')).toBeInTheDocument()
-    })
-
-    it('debe mostrar el input de búsqueda', () => {
-      renderWithAuth(<Generador />)
-      
-      const searchInput = screen.getByPlaceholderText('buscar')
-      expect(searchInput).toBeInTheDocument()
-      expect(searchInput).toHaveAttribute('type', 'text')
-      expect(searchInput).toHaveAttribute('id', 'openapi-name')
-    })
-  })
-
-  describe('Funcionalidad de formulario', () => {
-    it('debe permitir escribir en el input de búsqueda', async () => {
-      renderWithAuth(<Generador />)
-      
-      const searchInput = screen.getByPlaceholderText('buscar')
-      await user.type(searchInput, 'mi-api')
-      
-      expect(searchInput).toHaveValue('mi-api')
-    })
-
-    it('debe tener el botón de validar', () => {
-      renderWithAuth(<Generador />)
-      
-      const validateButton = screen.getByText('Validar')
-      expect(validateButton).toBeInTheDocument()
-      expect(validateButton).toHaveClass('btn', 'validar')
-    })
-
-    it('debe tener el botón de generar componente', () => {
-      renderWithAuth(<Generador />)
-      
-      const generateButton = screen.getByText('Generar componente')
-      expect(generateButton).toBeInTheDocument()
-      expect(generateButton).toHaveClass('btn', 'generar')
-    })
-  })
-
-  describe('Interacción con botones', () => {
-    it('debe manejar el clic en el botón validar', async () => {
-      renderWithAuth(<Generador />)
-      
-      const validateButton = screen.getByText('Validar')
-      await user.click(validateButton)
-      
-      // El botón debería ser clickeable
-      expect(validateButton).toBeInTheDocument()
-    })
-
-    it('debe manejar el clic en el botón generar', async () => {
-      renderWithAuth(<Generador />)
-      
-      const generateButton = screen.getByText('Generar componente')
-      await user.click(generateButton)
-      
-      // El botón debería ser clickeable
-      expect(generateButton).toBeInTheDocument()
-    })
-  })
-
-  describe('Estructura del formulario', () => {
-    it('debe tener la estructura de formulario correcta', () => {
-      renderWithAuth(<Generador />)
-      
-      const form = document.querySelector('form')
-      expect(form).toBeInTheDocument()
-      expect(form).toHaveClass('generador-form')
-    })
-
-    it('debe tener el grupo de botones', () => {
-      renderWithAuth(<Generador />)
-      
-      const buttonGroup = document.querySelector('.button-group')
-      expect(buttonGroup).toBeInTheDocument()
-    })
-
-    it('debe tener el grupo de formulario', () => {
-      renderWithAuth(<Generador />)
-      
-      const formGroup = document.querySelector('.form-group')
-      expect(formGroup).toBeInTheDocument()
-    })
-  })
-
-  describe('Estructura de la tabla', () => {
-    it('debe tener el contenedor de tabla', () => {
-      renderWithAuth(<Generador />)
-      
-      const tableContainer = document.querySelector('.tabla-container')
-      expect(tableContainer).toBeInTheDocument()
-    })
-
-    it('debe tener la tabla con la clase correcta', () => {
-      renderWithAuth(<Generador />)
-      
-      const table = document.querySelector('.tabla-generador')
-      expect(table).toBeInTheDocument()
-    })
-
-    it('debe tener el encabezado de tabla', () => {
-      renderWithAuth(<Generador />)
-      
-      const thead = document.querySelector('thead')
-      expect(thead).toBeInTheDocument()
-    })
-
-    it('debe tener el cuerpo de tabla', () => {
-      renderWithAuth(<Generador />)
-      
-      const tbody = document.querySelector('tbody')
-      expect(tbody).toBeInTheDocument()
-    })
-  })
-
-  describe('Accesibilidad', () => {
-    it('debe tener labels asociados correctamente', () => {
-      renderWithAuth(<Generador />)
-      
-      const label = screen.getByText('Nombre openAPI')
-      const input = screen.getByPlaceholderText('buscar')
-      
-      expect(label).toHaveAttribute('for', 'openapi-name')
-      expect(input).toHaveAttribute('id', 'openapi-name')
-    })
-
-    it('debe tener autocomplete deshabilitado', () => {
-      renderWithAuth(<Generador />)
-      
-      const form = document.querySelector('form')
-      const input = screen.getByPlaceholderText('buscar')
-      
-      expect(form).toHaveAttribute('autoComplete', 'off')
-      expect(input).toHaveAttribute('autoComplete', 'off')
-    })
-  })
-
-  describe('Estilos y clases CSS', () => {
-    it('debe tener las clases CSS principales', () => {
-      renderWithAuth(<Generador />)
-      
-      const container = document.querySelector('.generador-content')
-      const inner = document.querySelector('.generador-inner')
-      
-      expect(container).toBeInTheDocument()
-      expect(inner).toBeInTheDocument()
-    })
-
-    it('debe tener el input con la clase search-input', () => {
-      renderWithAuth(<Generador />)
-      
-      const input = screen.getByPlaceholderText('buscar')
-      expect(input).toHaveClass('search-input')
-    })
-  })
-})
+        curl --request POST \
+  --url 'https://ssm.dcloud.cl.bsch/oauth/token?grant_type=refresh_token&client_id=webtools&refresh_token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjMuMTIuMjAta2V5In0.eyJhdGkiOiJEYkJfOHl5R2JuWTlrMnp0VFNOVUktT29nUkEiLCJzY29wZSI6WyJPUEVOIl0sImlzcyI6Imh0dHA6Ly9kc3MtaWFtLmRzcy1kZXYuc3ZjLmNsdXN0ZXIubG9jYWw6OTEwMCIsImV4cCI6MTc1NjIyOTY0MywianRpIjoibTdyaWNQM0pRcW43TnY5eC1xeXNYQ1REUkhVIiwiY2xpZW50X2lkIjoid2VidG9vbHMiLCJhdXRob3JpdGllcyI6WyJST0xFX2Jyb2tlciIsIlJPTEVfQURNSU4iXSwidXNlcm5hbWUiOiIyNzA1Nzc5NDYifQ.XlGlX-QrE4SDHFToIAJlXMYh8PpZ1Y9eNjYq1Atn07NQz5C9G95o3hDnzDR84vNhUv3wwiJNQKgf4IHgEw_sxNWif_tiYMvAAyeQnKUmkjZ5LEPeGVZophCYVYnBQK9NxCsTeDZmbU19qOHr1dIFDrkw-G875kPsvb7gazwUl2wEDFXVVhyxu9qxf5wO8tVzGMHwSuzyt4uhsF8YetNIne-kRSlmg6AQWyep4zzEqmso_YD6H7D_xO7xpR4IX8DMG8Qmu721m5LnyUJaS1B91a1PYcbH-QvT5cMDoQEKvIDttKtDgW6h9G7YeEnKOSGbjvbNyQlqxO4ABRqndompIw' \
+  --header 'authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjMuMTIuMjAta2V5In0.eyJzY29wZSI6WyJPUEVOIl0sImlzcyI6Imh0dHA6Ly9kc3MtaWFtLmRzcy1kZXYuc3ZjLmNsdXN0ZXIubG9jYWw6OTEwMCIsImV4cCI6MTc1NjIyOTU4MywianRpIjoiRGJCXzh5eUdiblk5azJ6dFRTTlVJLU9vZ1JBIiwiY2xpZW50X2lkIjoid2VidG9vbHMiLCJhdXRob3JpdGllcyI6WyJST0xFX2Jyb2tlciIsIlJPTEVfQURNSU4iXSwidXNlcm5hbWUiOiIyNzA1Nzc5NDYifQ.LKDH296SKl5SWES6D2eIRfnJo-bvbgjwRtYdWC4dc_1dfUyrk7vX1qiXxnqYUEQ5qjkSOIxxpr0NBHAT6FkacYJwhfOiXBOpOtuKcIui3OhbouSvmzh0KM9_o7Ey63rCmNeDa9ml6PMju8UYj50pRspcASZhNqRMaxH_i3TbHBs_HVOTwQaU-2MXGWpFaJ1ovc6uPNs4zonJ3GPn4ErSDJKXFDdXaNG_IFULcpZlZbJ4d_407L1_uxIud4bAMdpvzoI4Wac_fCYbdMDVbJb6CdevfLUlmDKXlSDxP84iI1rumdItGPTMH24HWB06TkH_lH8d3EEULOM-Q5Ouj5WRAg' \
+  --header 'content-type: application/x-www-form-urlencoded' \
+  --header 'oauth_type: iam'
