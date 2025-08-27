@@ -39,7 +39,7 @@ class AuthService {
     });
 
     const fullUrl = `${this.JWT_ENDPOINT}?${params.toString()}`;
-    console.log('🔍 Debug AuthService - URL completa:', fullUrl);
+    console.log('Debug AuthService - URL completa:', fullUrl);
 
     try {
       const response = await fetch(fullUrl, {
@@ -206,19 +206,6 @@ class AuthService {
     return token !== null && !this.isTokenExpired();
   }
 
-  /**
-   * Obtiene el token CSRF del DOM o genera uno
-   */
-  private getCSRFToken(): string {
-    // Intentar obtener el token CSRF del meta tag
-    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-    if (csrfMeta) {
-      return csrfMeta.getAttribute('content') || '';
-    }
-    
-    // Si no hay meta tag, generar un token simple
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  }
 }
 
 export default new AuthService();
