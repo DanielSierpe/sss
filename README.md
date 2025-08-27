@@ -1,279 +1,224 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import HttpService from '../HttpService';
-import AuthService from '../AuthService';
+interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+}
 
-// Mock del AuthService
-vi.mock('../AuthService');
+class AuthService {
+  private readonly JWT_ENDPOINT = import.meta.env.VITE_JWT_ENDPOINT;
+  private readonly REFRESH_ENDPOINT = import.meta.env.VITE_REFRESH_ENDPOINT;
+  private readonly REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI;
+  private readonly CLIENT_ID = import.meta.env.VITE_CLIENT_ID;
 
-// Mock de fetch
-vi.stubGlobal('fetch', vi.fn());
+  constructor() {
+    console.log('AuthService constructor - Variables de entorno:');
+    console.log('VITE_JWT_ENDPOINT:', import.meta.env.VITE_JWT_ENDPOINT);
+    console.log('VITE_REFRESH_ENDPOINT:', import.meta.env.VITE_REFRESH_ENDPOINT);
+    console.log('VITE_REDIRECT_URI:', import.meta.env.VITE_REDIRECT_URI);
+    console.log('VITE_CLIENT_ID:', import.meta.env.VITE_CLIENT_ID);
+  }
 
-// Mock de window.location
-Object.defineProperty(window, 'location', {
-  value: {
-    href: 'https://dss-login-webtools-ui-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/',
-  },
-  writable: true,
-});
+  /**
+   * Obtiene el token JWT usando el código de autorización
+   */
+  async getJWTToken(code: string): Promise<TokenResponse> {
+    console.log('Debug AuthService - Variables de entorno:');
+    console.log('JWT_ENDPOINT:', this.JWT_ENDPOINT);
+    console.log('REDIRECT_URI:', this.REDIRECT_URI);
+    console.log('Code recibido:', code);
+    
+    if (!this.JWT_ENDPOINT || !this.REDIRECT_URI) {
+      throw new Error('Configuración de OAuth incompleta. Verifique las variables de entorno.');
+    }
 
-describe('HttpService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // Mock de getValidToken que ahora es asíncrono
-    (AuthService.getValidToken as any).mockResolvedValue('test-token');
-    (AuthService.clearTokens as any).mockImplementation(() => {});
-  });
-
-  describe('request', () => {
-    it('debería hacer una petición GET exitosa', async () => {
-      const mockResponse = { data: 'test' };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.request('/test-endpoint', { method: 'GET' });
-
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/test-endpoint');
-      expect(fetchCall[1].method).toBe('GET');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(result).toEqual(mockResponse);
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: this.REDIRECT_URI
     });
 
-    it('debería hacer una petición POST con body', async () => {
-      const mockResponse = { success: true };
-      const requestBody = { name: 'test' };
-      
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
+    const fullUrl = `${this.JWT_ENDPOINT}?${params.toString()}`;
+    console.log('🔍 Debug AuthService - URL completa:', fullUrl);
 
-      const result = await HttpService.request('/test-endpoint', {
+    try {
+      const response = await fetch(fullUrl, {
         method: 'POST',
-        body: requestBody,
-      });
-
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/test-endpoint');
-      expect(fetchCall[1].method).toBe('POST');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(fetchCall[1].body).toBe(JSON.stringify(requestBody));
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('debería hacer una petición sin autenticación', async () => {
-      const mockResponse = { public: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.request('/public-endpoint', {
-        method: 'GET',
-        includeAuth: false,
-      });
-
-      expect(fetch).toHaveBeenCalledWith('/public-endpoint', {
-        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'true-client-ip': '0.0.0.0',
+          'oauth_type': 'iam'
         },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-
-    it('debería manejar respuestas vacías', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => '',
+        credentials: 'include'
       });
 
-      const result = await HttpService.request('/empty-endpoint');
+      if (!response.ok) {
+        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
+      }
 
-      expect(result).toBeNull();
-    });
-
-    it('debería redirigir al login si recibe 401', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-      });
-
-      await expect(HttpService.request('/protected-endpoint')).rejects.toThrow('Token expirado y no se pudo renovar. Redirigiendo al login...');
-      expect(AuthService.clearTokens).toHaveBeenCalled();
-    });
-
-    it('debería manejar otros errores HTTP', async () => {
-      (fetch as any).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      });
-
-      await expect(HttpService.request('/error-endpoint')).rejects.toThrow('HTTP error! status: 500 - Internal Server Error');
-    });
-
-    it('debería manejar errores de red', async () => {
-      (fetch as any).mockRejectedValueOnce(new Error('Network error'));
-
-      await expect(HttpService.request('/network-error')).rejects.toThrow('Network error');
-    });
-  });
-
-  describe('get', () => {
-    it('debería hacer una petición GET', async () => {
-      const mockResponse = { data: 'get-test' };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.get('/get-endpoint');
-
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/get-endpoint');
-      expect(fetchCall[1].method).toBe('GET');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('post', () => {
-    it('debería hacer una petición POST', async () => {
-      const mockResponse = { success: true };
-      const requestBody = { name: 'post-test' };
+      const tokenData: TokenResponse = await response.json();
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.post('/post-endpoint', requestBody);
-
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/post-endpoint');
-      expect(fetchCall[1].method).toBe('POST');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(fetchCall[1].body).toBe(JSON.stringify(requestBody));
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('put', () => {
-    it('debería hacer una petición PUT', async () => {
-      const mockResponse = { updated: true };
-      const requestBody = { name: 'put-test' };
+      // Guardar el token en localStorage
+      this.saveToken(tokenData);
       
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
+      return tokenData;
+    } catch (error) {
+      console.error('Error al obtener el token JWT:', error);
+      throw error;
+    }
+  }
 
-      const result = await HttpService.put('/put-endpoint', requestBody);
+  /**
+   * Renueva el token usando el refresh token
+   */
+  async refreshToken(): Promise<TokenResponse | null> {
+    if (!this.REFRESH_ENDPOINT || !this.CLIENT_ID) {
+      console.error('Configuración de refresh token incompleta. Verifique las variables de entorno.');
+      return null;
+    }
 
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/put-endpoint');
-      expect(fetchCall[1].method).toBe('PUT');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(fetchCall[1].body).toBe(JSON.stringify(requestBody));
-      expect(result).toEqual(mockResponse);
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      console.warn('No hay refresh token disponible');
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: this.CLIENT_ID,
+      refresh_token: refreshToken
     });
-  });
 
-  describe('delete', () => {
-    it('debería hacer una petición DELETE', async () => {
-      const mockResponse = { deleted: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.delete('/delete-endpoint');
-
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/delete-endpoint');
-      expect(fetchCall[1].method).toBe('DELETE');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('patch', () => {
-    it('debería hacer una petición PATCH', async () => {
-      const mockResponse = { patched: true };
-      const requestBody = { name: 'patch-test' };
-      
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.patch('/patch-endpoint', requestBody);
-
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/patch-endpoint');
-      expect(fetchCall[1].method).toBe('PATCH');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(fetchCall[1].body).toBe(JSON.stringify(requestBody));
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('requestWithoutAuth', () => {
-    it('debería hacer una petición sin autenticación', async () => {
-      const mockResponse = { public: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const result = await HttpService.requestWithoutAuth('/public-endpoint');
-
-      expect(fetch).toHaveBeenCalledWith('/public-endpoint', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      expect(result).toEqual(mockResponse);
-    });
-  });
-
-  describe('manejo de headers personalizados', () => {
-    it('debería incluir headers personalizados', async () => {
-      const mockResponse = { custom: true };
-      (fetch as any).mockResolvedValueOnce({
-        ok: true,
-        text: async () => JSON.stringify(mockResponse),
-      });
-
-      const customHeaders = {
-        'X-Custom-Header': 'custom-value',
-        'Accept': 'application/xml',
+    try {
+      const currentToken = this.getStoredToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'oauth_type': 'iam'
       };
 
-      await HttpService.request('/custom-endpoint', {
-        method: 'GET',
-        headers: customHeaders,
+      // Agregar el token actual como Bearer si existe
+      if (currentToken) {
+        headers['authorization'] = `Bearer ${currentToken}`;
+      }
+
+      const response = await fetch(`${this.REFRESH_ENDPOINT}?${params.toString()}`, {
+        method: 'POST',
+        headers
       });
 
-      const fetchCall = (fetch as any).mock.calls[0];
-      expect(fetchCall[0]).toBe('/custom-endpoint');
-      expect(fetchCall[1].method).toBe('GET');
-      expect(fetchCall[1].headers['Content-Type']).toBe('application/json');
-      expect(fetchCall[1].headers['Authorization']).toBe('Bearer test-token');
-      expect(fetchCall[1].headers['X-Custom-Header']).toBe('custom-value');
-      expect(fetchCall[1].headers['Accept']).toBe('application/xml');
-    });
-  });
-});
+      if (!response.ok) {
+        console.error(`Error al renovar token: ${response.status} ${response.statusText}`);
+        // Si falla el refresh, limpiar tokens
+        this.clearTokens();
+        return null;
+      }
+
+      const tokenData: TokenResponse = await response.json();
+      
+      // Guardar el nuevo token
+      this.saveToken(tokenData);
+      
+      return tokenData;
+    } catch (error) {
+      console.error('Error al renovar el token:', error);
+      this.clearTokens();
+      return null;
+    }
+  }
+
+  /**
+   * Guarda el token en localStorage
+   */
+  private saveToken(tokenData: TokenResponse): void {
+    localStorage.setItem('access_token', tokenData.access_token);
+    localStorage.setItem('token_type', tokenData.token_type);
+    localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
+    
+    if (tokenData.refresh_token) {
+      localStorage.setItem('refresh_token', tokenData.refresh_token);
+    }
+    
+    // Guardar la fecha de expiración
+    const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
+    localStorage.setItem('token_expires_at', expiresAt.toString());
+  }
+
+  /**
+   * Obtiene el token almacenado
+   */
+  getStoredToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
+  /**
+   * Verifica si el token está expirado
+   */
+  isTokenExpired(): boolean {
+    const expiresAt = localStorage.getItem('token_expires_at');
+    if (!expiresAt) return true;
+    
+    return new Date().getTime() > parseInt(expiresAt);
+  }
+
+  /**
+   * Obtiene el token con el tipo para usar en headers
+   */
+  getAuthHeader(): string | null {
+    const token = this.getStoredToken();
+    const tokenType = localStorage.getItem('token_type') || 'Bearer';
+    
+    if (!token || this.isTokenExpired()) {
+      return null;
+    }
+    
+    return `${tokenType} ${token}`;
+  }
+
+  /**
+   * Obtiene el token con renovación automática si es necesario
+   */
+  async getValidToken(): Promise<string | null> {
+    if (!this.isTokenExpired()) {
+      return this.getStoredToken();
+    }
+
+    // Token expirado, intentar renovar
+    const refreshedToken = await this.refreshToken();
+    return refreshedToken ? refreshedToken.access_token : null;
+  }
+
+  /**
+   * Limpia todos los tokens almacenados
+   */
+  clearTokens(): void {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token_type');
+    localStorage.removeItem('token_expires_in');
+    localStorage.removeItem('token_expires_at');
+    localStorage.removeItem('refresh_token');
+  }
+
+  /**
+   * Verifica si el usuario está autenticado
+   */
+  isAuthenticated(): boolean {
+    const token = this.getStoredToken();
+    return token !== null && !this.isTokenExpired();
+  }
+
+  /**
+   * Obtiene el token CSRF del DOM o genera uno
+   */
+  private getCSRFToken(): string {
+    // Intentar obtener el token CSRF del meta tag
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+      return csrfMeta.getAttribute('content') || '';
+    }
+    
+    // Si no hay meta tag, generar un token simple
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  }
+}
+
+export default new AuthService();
