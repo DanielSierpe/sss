@@ -1,5 +1,3 @@
-# Variables de entorno para autenticación OAuth
-# Copia este archivo como .env y configura los valores reales para tu entorno
 
 # Endpoint para obtener el token JWT (auth_code)
 VITE_JWT_ENDPOINT=https://ssm.hcloud.cl.bsch/oauth/token
