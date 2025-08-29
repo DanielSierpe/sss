@@ -26,8 +26,6 @@ export default defineConfig({
     },
   },
   server: {
-    host: true,
-    port: 5173,
     proxy: {
       '/remoteApp': {
         target: `http://localhost:4174`,
@@ -35,43 +33,9 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/remoteApp/, ''),
         secure: false,
       },
-      '/oauth': {
-        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (_, req) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
-        },
-      },
-      '/api': {
-        target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (_, req) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
-        },
-      },
-    },
+    }
   },
   preview: {
-    host: true,
-    port: 4173,
     proxy: {
       '/remoteApp': {
         target: `http://localhost:4174`,
@@ -79,46 +43,13 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/remoteApp/, ''),
         secure: false,
       },
-      '/oauth': {
-        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (_, req) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
-        },
-      },
-      '/api': {
-        target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (_, req) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
-        },
-      },
-    },
+    }
   },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
-      provider: 'v8',
       reporter: ['clover', 'lcov', 'text', 'json', 'html'],
       all: true,
       include: ['src'],
@@ -131,6 +62,7 @@ export default defineConfig({
         'src/App.tsx',
         'src/global.d.ts',
         'src/test/setup.ts',
+        'src/setupTests.ts',
       ],
       thresholds: {
         statements: 0,
