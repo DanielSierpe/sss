@@ -3,15 +3,6 @@ import federation from '@originjs/vite-plugin-federation';
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config';
 
-// Declaraciones de tipos para Node.js
-declare global {
-  var console: {
-    log: (...args: any[]) => void;
-    error: (...args: any[]) => void;
-    warn: (...args: any[]) => void;
-  };
-}
-
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -37,7 +28,6 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    https: false,
     proxy: {
       '/remoteApp': {
         target: `http://localhost:4174`,
@@ -46,7 +36,7 @@ export default defineConfig({
         secure: false,
       },
       '/oauth': {
-        target: 'https://ssm.hcloud.cl.bsch',
+        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -62,7 +52,7 @@ export default defineConfig({
         },
       },
       '/api': {
-        target: 'https://ssm.dcloud.cl.bsch',
+        target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -82,7 +72,6 @@ export default defineConfig({
   preview: {
     host: true,
     port: 4173,
-    https: false,
     proxy: {
       '/remoteApp': {
         target: `http://localhost:4174`,
@@ -91,7 +80,7 @@ export default defineConfig({
         secure: false,
       },
       '/oauth': {
-        target: 'https://ssm.hcloud.cl.bsch',
+        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -107,7 +96,7 @@ export default defineConfig({
         },
       },
       '/api': {
-        target: 'https://ssm.dcloud.cl.bsch',
+        target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
