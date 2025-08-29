@@ -33,6 +33,38 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/remoteApp/, ''),
         secure: false,
       },
+      '/oauth': {
+        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+      '/api': {
+        target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
     }
   },
   preview: {
@@ -42,6 +74,38 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/remoteApp/, ''),
         secure: false,
+      },
+      '/oauth': {
+        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+      '/api': {
+        target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
       },
     }
   },
