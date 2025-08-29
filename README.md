@@ -1,68 +1,155 @@
-https://ssm.hcloud.cl.bsch/oauth/token?grant_type=authorization_code&code=L7a9YL_bEAIiz-lKygp6UkDs9-7u0M0L&redirect_uri=https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/
+/// <reference types="vitest" />
+import federation from '@originjs/vite-plugin-federation';
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vitest/config';
 
-https://ssm.dcloud.cl.bsch/oauth/token?grant_type=refresh_token&client_id=webtools&refresh_token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjMuMTIuMjAta2V5In0.eyJhdGkiOiJEYkJfOHl5R2JuWTlrMnp0VFNOVUktT29nUkEiLCJzY29wZSI6WyJPUEVOIl0sImlzcyI6Imh0dHA6Ly9kc3MtaWFtLmRzcy1kZXYuc3ZjLmNsdXN0ZXIubG9jYWw6OTEwMCIsImV4cCI6MTc1NjIyOTY0MywianRpIjoibTdyaWNQM0pRcW43TnY5eC1xeXNYQ1REUkhVIiwiY2xpZW50X2lkIjoid2VidG9vbHMiLCJhdXRob3JpdGllcyI6WyJST0xFX2Jyb2tlciIsIlJPTEVfQURNSU4iXSwidXNlcm5hbWUiOiIyNzA1Nzc5NDYifQ.XlGlX-QrE4SDHFToIAJlXMYh8PpZ1Y9eNjYq1Atn07NQz5C9G95o3hDnzDR84vNhUv3wwiJNQKgf4IHgEw_sxNWif_tiYMvAAyeQnKUmkjZ5LEPeGVZophCYVYnBQK9NxCsTeDZmbU19qOHr1dIFDrkw-G875kPsvb7gazwUl2wEDFXVVhyxu9qxf5wO8tVzGMHwSuzyt4uhsF8YetNIne-kRSlmg6AQWyep4zzEqmso_YD6H7D_xO7xpR4IX8DMG8Qmu721m5LnyUJaS1B91a1PYcbH-QvT5cMDoQEKvIDttKtDgW6h9G7YeEnKOSGbjvbNyQlqxO4ABRqndompIw
+// Declaraciones de tipos para Node.js
+declare global {
+  var console: {
+    log: (...args: any[]) => void;
+    error: (...args: any[]) => void;
+    warn: (...args: any[]) => void;
+  };
+}
 
-"items": [
-        {
-          "type": "http",
-          "name": "1 - GET JWT Token From Auth_Code",
-          "seq": 1,
-          "request": {
-            "url": "https://ssm.hcloud.cl.bsch/oauth/token?grant_type=authorization_code&code=L7a9YL_bEAIiz-lKygp6UkDs9-7u0M0L&redirect_uri=https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/",
-            "method": "POST",
-            "headers": [
-              {
-                "name": "content-type",
-                "value": "application/x-www-form-urlencoded",
-                "enabled": true
-              },
-              {
-                "name": "true-client-ip",
-                "value": "0.0.0.0",
-                "enabled": true
-              },
-              {
-                "name": "oauth_type",
-                "value": "iam",
-                "enabled": true
-              }
-            ],
-            "params": [
-              {
-                "name": "grant_type",
-                "value": "authorization_code",
-                "type": "query",
-                "enabled": true
-              },
-              {
-                "name": "code",
-                "value": "L7a9YL_bEAIiz-lKygp6UkDs9-7u0M0L",
-                "type": "query",
-                "enabled": true
-              },
-              {
-                "name": "redirect_uri",
-                "value": "https://chl-dss-lowcodeportal-dss-dev.ocp1.ch.dev.cmps.paas.f1rstbr.corp/",
-                "type": "query",
-                "enabled": true
-              }
-            ],
-            "body": {
-              "mode": "none",
-              "formUrlEncoded": [],
-              "multipartForm": []
-            },
-            "script": {},
-            "vars": {},
-            "assertions": [],
-            "tests": "",
-            "auth": {
-              "mode": "basic",
-              "basic": {
-                "username": "webtools",
-                "password": "webtools"
-              }
-            }
-          }
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [
+    react(),
+    federation({
+      name: 'app',
+      remotes: {
+        remoteApp: '/remoteApp/assets/remoteEntry.js',
+      },
+      shared: ['react', 'react-dom'],
+    }),
+  ],
+  build: {
+    target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
         },
-        
+      },
+    },
+  },
+  server: {
+    host: true,
+    port: 5173,
+    https: false,
+    proxy: {
+      '/remoteApp': {
+        target: `http://localhost:4174`,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/remoteApp/, ''),
+        secure: false,
+      },
+      '/oauth': {
+        target: 'https://ssm.hcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+      '/api': {
+        target: 'https://ssm.dcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+    },
+  },
+  preview: {
+    host: true,
+    port: 4173,
+    https: false,
+    proxy: {
+      '/remoteApp': {
+        target: `http://localhost:4174`,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/remoteApp/, ''),
+        secure: false,
+      },
+      '/oauth': {
+        target: 'https://ssm.hcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+      '/api': {
+        target: 'https://ssm.dcloud.cl.bsch',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (_, req) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['clover', 'lcov', 'text', 'json', 'html'],
+      all: true,
+      include: ['src'],
+      exclude: [
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/__mocks__/**/*',
+        'src/__fixtures__/**/*',
+        'src/**/index.ts',
+        'src/App.tsx',
+        'src/global.d.ts',
+        'src/test/setup.ts',
+      ],
+      thresholds: {
+        statements: 0,
+        branches: 0,
+        functions: 0,
+        lines: 0,
+      },
+    },
+    restoreMocks: true,
+  }
+})
