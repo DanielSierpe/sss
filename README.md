@@ -34,7 +34,7 @@ export default defineConfig({
         secure: false,
       },
       '/oauth': {
-        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
+        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
@@ -76,7 +76,7 @@ export default defineConfig({
         secure: false,
       },
       '/oauth': {
-        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
+        target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
