@@ -43,10 +43,10 @@ export default defineConfig({
             console.error('proxy error', err);
           });
           proxy.on('proxyReq', (proxyReq, req) => {
-            console.log('➡️ Sending Request:', req.method, req.url);
+            console.log('Sending Request:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('⬅️ Response:', proxyRes.statusCode, req.url);
+            console.log('Response:', proxyRes.statusCode, req.url);
           });
         },
       },
