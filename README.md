@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config';
 import type { IncomingMessage, ServerResponse } from 'http';
 
-
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
@@ -34,11 +34,11 @@ export default defineConfig({
         rewrite: (path: string) => path.replace(/^\/remoteApp/, ''),
         secure: false,
       },
-      '/oauth': {
+      '/oauth/token': {
         target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
         changeOrigin: true,
         secure: false, 
-        rewrite: (path: string) => path, 
+        rewrite: () => '/oauth/token', 
         configure: (proxy: any) => {
           proxy.on('error', (err: Error) => {
             console.error('Error en proxy OAuth:', err);
@@ -52,11 +52,11 @@ export default defineConfig({
         },
         agent: false,
       },
-      '/api': {
+      '/api/oauth/token': {
         target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
         changeOrigin: true,
         secure: false, 
-        rewrite: (path: string) => path, 
+        rewrite: () => '/oauth/token', 
         configure: (proxy: any) => {
           proxy.on('error', (err: Error) => {
             console.error('Error en proxy API:', err);
@@ -80,11 +80,11 @@ export default defineConfig({
         rewrite: (path: string) => path.replace(/^\/remoteApp/, ''),
         secure: false,
       },
-      '/oauth': {
+      '/oauth/token': {
         target: process.env.VITE_JWT_ENDPOINT || 'https://ssm.hcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
-        rewrite: (path: string) => path,
+        rewrite: () => '/oauth/token',
         configure: (proxy: any) => {
           proxy.on('error', (err: Error) => {
             console.error('Error en proxy OAuth (preview):', err);
@@ -98,11 +98,11 @@ export default defineConfig({
         },
         agent: false,
       },
-      '/api': {
+      '/api/oauth/token': {
         target: process.env.VITE_REFRESH_ENDPOINT || 'https://ssm.dcloud.cl.bsch',
         changeOrigin: true,
         secure: false,
-        rewrite: (path: string) => path,
+        rewrite: () => '/oauth/token',
         configure: (proxy: any) => {
           proxy.on('error', (err: Error) => {
             console.error('Error en proxy API (preview):', err);
@@ -111,7 +111,7 @@ export default defineConfig({
             console.log('Enviando petición API (preview):', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes: ServerResponse, req: IncomingMessage) => {
-            console.log('Respuesta API (preview):', proxyRes.statusCode, req.url);
+            console.log('Respuesta API:', proxyRes.statusCode, req.url);
           });
         },
         agent: false,
