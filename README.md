@@ -26,79 +26,19 @@ class AuthService {
       throw new Error('Configuración de OAuth incompleta. Verifique VITE_REDIRECT_URI.');
     }
 
+  
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: this.REDIRECT_URI,
-      client_id: this.CLIENT_ID
+      redirect_uri: this.REDIRECT_URI
     });
 
-    const proxyUrls = [
-      '/oauth/token',           
-      '/api/oauth/token',      
-      '/auth/token'           
-    ];
-
-    for (let i = 0; i < proxyUrls.length; i++) {
-      const proxyUrl = proxyUrls[i];
-      console.log(`Intentando ruta ${i + 1}: ${proxyUrl}`);
-      
-      try {
-        const response = await fetch(proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'true-client-ip': '0.0.0.0',
-            'oauth_type': 'iam',
-            'Authorization': 'Basic ' + btoa('webtools:webtools')
-          },
-          body: params.toString(),
-          mode: 'cors',
-          credentials: 'include'
-        });
-
-        console.log(`Ruta ${i + 1} respuesta: ${response.status} ${response.statusText}`);
-
-        if (response.ok) {
-          console.log(`Éxito con POST en ruta ${i + 1}: ${proxyUrl}`);
-          const data = await response.json();
-          return data as TokenResponse;
-        }
-
-        if (response.status === 405) {
-          console.log(`Intentando POST con query params en ruta ${i + 1}`);
-          const response2 = await fetch(`${proxyUrl}?${params.toString()}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'true-client-ip': '0.0.0.0',
-              'oauth_type': 'iam',
-              'Authorization': 'Basic ' + btoa('webtools:webtools')
-            },
-            mode: 'cors',
-            credentials: 'include'
-          });
-
-          if (response2.ok) {
-            console.log(`Éxito con POST + query en ruta ${i + 1}: ${proxyUrl}`);
-            const data = await response2.json();
-            return data as TokenResponse;
-          }
-        }
-
-      } catch (error) {
-        console.log(`Error en ruta ${i + 1}:`, error);
-        continue;
-      }
-    }
-
-    console.log('Todas las rutas del proxy fallaron, probando directamente al backend');
-    
     try {
-      const directUrl = `${import.meta.env.VITE_JWT_ENDPOINT}`;
-      console.log('Intentando directamente:', directUrl);
+      const endpoint = import.meta.env.VITE_JWT_ENDPOINT;
+      console.log('Endpoint OAuth:', endpoint);
+      console.log('Parámetros:', params.toString());
       
-      const response = await fetch(directUrl, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -111,23 +51,29 @@ class AuthService {
         credentials: 'include'
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        return data as TokenResponse;
+      console.log('Respuesta del servidor:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error en la respuesta:', errorText);
+        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
       }
 
-      throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
+      const tokenData: TokenResponse = await response.json();
+      console.log('Token obtenido exitosamente');
+      
+      this.saveToken(tokenData);
+      
+      return tokenData;
     } catch (error) {
-      console.error('Error final al obtener token:', error);
-      throw new Error(`Error al obtener token: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      console.error('Error al obtener el token JWT:', error);
+      throw error;
     }
   }
 
   async refreshToken(): Promise<TokenResponse | null> {
-    console.log('Intentando renovar token...');
-    
     if (!this.CLIENT_ID) {
-      console.error('Configuración de refresh token incompleta. Verifique VITE_CLIENT_ID.');
+      console.warn('No hay client_id configurado');
       return null;
     }
 
@@ -154,10 +100,11 @@ class AuthService {
         headers['Authorization'] = `Bearer ${currentToken}`;
       }
 
-      const proxyUrl = `/api/oauth/token`;
-      console.log('URL del proxy para refresh:', proxyUrl);
+      const endpoint = import.meta.env.VITE_REFRESH_ENDPOINT;
+      console.log('Endpoint refresh:', endpoint);
+      console.log('Parámetros refresh:', bodyParams.toString());
 
-      const response = await fetch(proxyUrl, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers,
         credentials: 'include',
