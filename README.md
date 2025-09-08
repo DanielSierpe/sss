@@ -1,236 +1,223 @@
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-}
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-class AuthService {
-  private readonly REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI;
-  private readonly CLIENT_ID = import.meta.env.VITE_CLIENT_ID;
+// Mock de localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
 
-  constructor() {
-    console.log('AuthService constructor - Variables de entorno:');
-    console.log('VITE_REDIRECT_URI:', import.meta.env.VITE_REDIRECT_URI);
-    console.log('VITE_CLIENT_ID:', import.meta.env.VITE_CLIENT_ID);
-  }
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
 
-  /**
-   * Obtiene el token JWT usando el código de autorización
-   * Usa el proxy configurado en Vite para evitar problemas de CORS y certificados
-   */
-  async getJWTToken(code: string): Promise<TokenResponse> {
-    console.log('Obteniendo token JWT con código:', code);
-    
-    if (!this.REDIRECT_URI) {
-      throw new Error('Configuración de OAuth incompleta. Verifique VITE_REDIRECT_URI.');
-    }
+// Mock de fetch
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
-  
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: this.REDIRECT_URI
+// Mock de btoa para Basic Auth
+global.btoa = vi.fn((str: string) => Buffer.from(str).toString('base64'));
+
+// Importar AuthService después de configurar los mocks
+import AuthService from '../AuthService';
+
+describe('AuthService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockReset();
+
+    // Configurar variables de entorno
+    Object.defineProperty(import.meta, 'env', {
+      value: {
+        VITE_JWT_ENDPOINT: 'https://ssm.hcloud.cl.bsch/oauth/token',
+        VITE_REFRESH_ENDPOINT: 'https://ssm.dcloud.cl.bsch/oauth/token',
+        VITE_REDIRECT_URI: 'https://redirect.example.com',
+        VITE_CLIENT_ID: 'webtools',
+      },
+      writable: true,
+    });
+  });
+
+  describe('getStoredToken', () => {
+    it('debería retornar el token almacenado', () => {
+      localStorageMock.getItem.mockReturnValue('stored-token');
+      const result = AuthService.getStoredToken();
+      expect(localStorageMock.getItem).toHaveBeenCalledWith('access_token');
+      expect(result).toBe('stored-token');
     });
 
-    try {
-      const endpoint = import.meta.env.VITE_JWT_ENDPOINT;
-      console.log('Endpoint OAuth:', endpoint);
-      console.log('Parámetros:', params.toString());
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'true-client-ip': '0.0.0.0',
-          'oauth_type': 'iam',
-          'Authorization': 'Basic ' + btoa('webtools:webtools')
-        },
-        body: params.toString(),
-        mode: 'cors',
-        credentials: 'include'
-      });
+    it('debería retornar null si no hay token', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.getStoredToken();
+      expect(result).toBeNull();
+    });
+  });
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
+  describe('clearTokens', () => {
+    it('debería limpiar todos los tokens del localStorage', () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      AuthService.clearTokens();
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_type');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_in');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_at');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+      expect(consoleSpy).toHaveBeenCalledWith('Tokens limpiados del localStorage');
+      consoleSpy.mockRestore();
+    });
+  });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error en la respuesta:', errorText);
-        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
-      }
-
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token obtenido exitosamente');
-      console.log('Estructura del token recibido:', JSON.stringify(tokenData, null, 2));
-      
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al obtener el token JWT:', error);
-      throw error;
-    }
-  }
-
-  async refreshToken(): Promise<TokenResponse | null> {
-    if (!this.CLIENT_ID) {
-      console.warn('No hay client_id configurado');
-      return null;
-    }
-
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      console.warn('No hay refresh token disponible');
-      return null;
-    }
-
-    const bodyParams = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: this.CLIENT_ID,
-      refresh_token: refreshToken
+  describe('isTokenExpired', () => {
+    it('debería retornar true si no hay fecha de expiración', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(true);
     });
 
-    try {
-      const currentToken = this.getStoredToken();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'oauth_type': 'iam'
+    it('debería retornar true si el token está expirado', () => {
+      const pastTime = new Date().getTime() - 1000;
+      localStorageMock.getItem.mockReturnValue(pastTime.toString());
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(true);
+    });
+
+    it('debería retornar false si el token no está expirado', () => {
+      const futureTime = new Date().getTime() + 1000000;
+      localStorageMock.getItem.mockReturnValue(futureTime.toString());
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getAuthHeader', () => {
+    it('debería retornar el header de autorización con token válido', () => {
+      const futureTime = new Date().getTime() + 1000000;
+      localStorageMock.getItem
+        .mockReturnValueOnce('test-token')
+        .mockReturnValueOnce('Bearer')
+        .mockReturnValueOnce(futureTime.toString());
+      const result = AuthService.getAuthHeader();
+      expect(result).toBe('Bearer test-token');
+    });
+
+    it('debería retornar null si no hay token', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.getAuthHeader();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getJWTToken (directo a backend)', () => {
+    it('debería llamar al endpoint con POST y x-www-form-urlencoded sin client_id', async () => {
+      const responseBody = {
+        access_token: 'acc',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'ref',
       };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
 
-      if (currentToken) {
-        headers['Authorization'] = `Bearer ${currentToken}`;
-      }
+      await AuthService.getJWTToken('code123');
 
-      const endpoint = import.meta.env.VITE_REFRESH_ENDPOINT;
-      console.log('Endpoint refresh:', endpoint);
-      console.log('Parámetros refresh:', bodyParams.toString());
+      // Verificar URL y body
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ssm.hcloud.cl.bsch/oauth/token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'oauth_type': 'iam',
+          }),
+          body: expect.stringContaining('grant_type=authorization_code'),
+        })
+      );
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: bodyParams.toString(),
-      });
+      const bodySent = (mockFetch.mock.calls[0][1] as any).body as string;
+      expect(bodySent).toContain('grant_type=authorization_code');
+      expect(bodySent).toContain('code=code123');
+      expect(bodySent).toContain('redirect_uri=');
+      expect(bodySent).not.toContain('client_id=');
 
-      console.log('Respuesta del servidor (refresh):', response.status, response.statusText);
+      // Verificar guardado
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'acc');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_type', 'Bearer');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'ref');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error al renovar token:', errorText);
-        this.clearTokens();
-        return null;
-      }
+    it('debería manejar respuesta no OK', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: vi.fn().mockResolvedValue('bad'),
+      } as any);
 
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token renovado exitosamente');
+      await expect(AuthService.getJWTToken('badcode')).rejects.toThrow('Error al obtener token: 400 Bad Request');
+    });
+  });
+
+  describe('refreshToken (directo a backend)', () => {
+    it('debería llamar al endpoint con POST y guardar token', async () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('ref') 
+        .mockReturnValueOnce('acc'); 
+
+      const responseBody = {
+        access_token: 'new-acc',
+        token_type: 'Bearer',
+        expires_in: 1800,
+        refresh_token: 'new-ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      const result = await AuthService.refreshToken();
+      expect(result?.access_token).toBe('new-acc');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ssm.dcloud.cl.bsch/oauth/token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+          body: expect.stringContaining('grant_type=refresh_token'),
+        })
+      );
+    });
+
+    it('debería usar expiración por defecto si expires_in no viene', async () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('ref') 
+        .mockReturnValueOnce('acc');
+
+      const responseBody = {
+        access_token: 'na',
+        token_type: 'Bearer',
+
+      } as any;
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      await AuthService.refreshToken();
+
       
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al renovar el token:', error);
-      this.clearTokens();
-      return null;
-    }
-  }
-
-  private saveToken(tokenData: TokenResponse): void {
-    // Validar que los campos requeridos existan
-    if (!tokenData.access_token) {
-      console.error('Token no contiene access_token');
-      return;
-    }
-
-    if (!tokenData.token_type) {
-      console.error('Token no contiene token_type');
-      return;
-    }
-
-
-    localStorage.setItem('access_token', tokenData.access_token);
-    localStorage.setItem('token_type', tokenData.token_type);
-    
-    
-    if (tokenData.expires_in !== undefined && tokenData.expires_in !== null) {
-      localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
-      
-     
-      const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Fecha de expiración calculada:', new Date(expiresAt).toISOString());
-    } else {
-      console.warn('Token no contiene expires_in, no se puede calcular expiración');
-   
-      const defaultExpiresIn = 3600; 
-      localStorage.setItem('token_expires_in', defaultExpiresIn.toString());
-      const expiresAt = new Date().getTime() + (defaultExpiresIn * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Usando expiración por defecto (1 hora)');
-    }
-    
-
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token);
-      console.log('Refresh token guardado');
-    } else {
-      console.log('No hay refresh token disponible');
-    }
-    
-    console.log('Token guardado en localStorage exitosamente');
-  }
-
-  getStoredToken(): string | null {
-    return localStorage.getItem('access_token');
-  }
-
-  isTokenExpired(): boolean {
-    const expiresAt = localStorage.getItem('token_expires_at');
-    if (!expiresAt) return true;
-    
-    const isExpired = new Date().getTime() > parseInt(expiresAt);
-    if (isExpired) {
-      console.log('Token expirado');
-    }
-    return isExpired;
-  }
-
-  getAuthHeader(): string | null {
-    const token = this.getStoredToken();
-    const tokenType = localStorage.getItem('token_type') || 'Bearer';
-    
-    if (!token || this.isTokenExpired()) {
-      return null;
-    }
-    
-    return `${tokenType} ${token}`;
-  }
-
-  async getValidToken(): Promise<string | null> {
-    if (!this.isTokenExpired()) {
-      return this.getStoredToken();
-    }
-
-    console.log('Token expirado, intentando renovar...');
-    const refreshedToken = await this.refreshToken();
-    return refreshedToken ? refreshedToken.access_token : null;
-  }
-
-  clearTokens(): void {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token_type');
-    localStorage.removeItem('token_expires_in');
-    localStorage.removeItem('token_expires_at');
-    localStorage.removeItem('refresh_token');
-    console.log('Tokens limpiados del localStorage');
-  }
-
-  isAuthenticated(): boolean {
-    const token = this.getStoredToken();
-    const authenticated = token !== null && !this.isTokenExpired();
-    console.log('Usuario autenticado:', authenticated);
-    return authenticated;
-  }
-
-}
-
-export default new AuthService();
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
+    });
+  });
+});
