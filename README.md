@@ -1,192 +1,380 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ExecutorService } from '../ExecutorService';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuthContext } from '../contexts/AuthContext';
+import { ExecutorService } from '../services/ExecutorService';
+import type { AppStatus, ExecutionLog } from '../services/ExecutorService';
+import './Generador.css';
 
-// Mock de AuthService
-vi.mock('../AuthService', () => ({
-  default: {
-    getValidToken: vi.fn()
-  }
-}));
+const Generador: React.FC = () => {
+  const { isAuthenticated, token, isLoading } = useAuthContext();
+  
+  // Estados para la búsqueda y selección
+  const [searchQuery, setSearchQuery] = useState('');
+  const [availableApps, setAvailableApps] = useState<string[]>([]);
+  const [filteredApps, setFilteredApps] = useState<string[]>([]);
+  const [selectedApp, setSelectedApp] = useState<string>('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  
+  // Estados para el modal de logs
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
+  const [logs, setLogs] = useState<ExecutionLog[]>([]);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionMessage, setExecutionMessage] = useState('');
+  const [showLogs, setShowLogs] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  // Referencias
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const logModalRef = useRef<HTMLDivElement>(null);
+  
+  // Polling para actualizar el estado
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
-// Mock de fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+  // Cargar aplicaciones disponibles al montar el componente
+  useEffect(() => {
+    loadAvailableApps();
+  }, []);
 
-// Mock de atob y btoa
-global.atob = vi.fn();
-global.btoa = vi.fn();
+  // Filtrar aplicaciones cuando cambia la búsqueda
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const filtered = availableApps.filter(app => 
+        app.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredApps(filtered);
+    } else {
+      setFilteredApps(availableApps);
+    }
+  }, [searchQuery, availableApps]);
 
-// Mock de window.URL
-const mockCreateObjectURL = vi.fn();
-const mockRevokeObjectURL = vi.fn();
-Object.defineProperty(window, 'URL', {
-  value: {
-    createObjectURL: mockCreateObjectURL,
-    revokeObjectURL: mockRevokeObjectURL
-  }
-});
+  // Limpiar polling al desmontar
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
-// Mock de document.createElement
-const mockLink = {
-  href: '',
-  download: '',
-  click: vi.fn()
-};
-const mockCreateElement = vi.fn(() => mockLink);
-Object.defineProperty(document, 'createElement', {
-  value: mockCreateElement
-});
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+      if (logModalRef.current && !logModalRef.current.contains(event.target as Node)) {
+        setShowLogModal(false);
+        stopPolling();
+      }
+    };
 
-// Mock de document.body
-const mockBody = {
-  appendChild: vi.fn(),
-  removeChild: vi.fn()
-};
-Object.defineProperty(document, 'body', {
-  value: mockBody
-});
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-describe('ExecutorService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  const loadAvailableApps = async () => {
+    try {
+      setIsSearching(true);
+      const apps = await ExecutorService.searchApps('');
+      setAvailableApps(apps);
+      setFilteredApps(apps);
+    } catch (error) {
+      console.error('Error cargando aplicaciones:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
-  describe('searchApps', () => {
-    it('debería retornar todas las aplicaciones cuando no hay query', async () => {
-      const result = await ExecutorService.searchApps('');
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    setShowDropdown(true);
+    
+    if (value !== selectedApp) {
+      setSelectedApp('');
+    }
+  };
 
-      expect(result).toEqual([
-        'chl-dss-fraudlocal',
-        'chl-dss-fraudprod',
-        'chl-dss-risklocal',
-        'chl-dss-riskprod',
-        'chl-dss-compliance',
-        'chl-dss-monitoring',
-        'chl-dss-analytics',
-        'chl-dss-reporting'
-      ]);
-    });
+  const handleAppSelect = (app: string) => {
+    setSelectedApp(app);
+    setSearchQuery(app);
+    setShowDropdown(false);
+  };
 
-    it('debería filtrar aplicaciones por query', async () => {
-      const result = await ExecutorService.searchApps('fraud');
+  const handleGenerateComponent = async () => {
+    if (!selectedApp) return;
 
-      expect(result).toEqual([
-        'chl-dss-fraudlocal',
-        'chl-dss-fraudprod'
-      ]);
-    });
+    try {
+      setIsExecuting(true);
+      setExecutionMessage('Iniciando generación del componente...');
+      setShowLogModal(true);
+      setLogs([]);
 
-    it('debería ser case insensitive', async () => {
-      const result = await ExecutorService.searchApps('FRAUD');
-
-      expect(result).toEqual([
-        'chl-dss-fraudlocal',
-        'chl-dss-fraudprod'
-      ]);
-    });
-
-    it('debería retornar array vacío para query sin coincidencias', async () => {
-      const result = await ExecutorService.searchApps('nonexistent');
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe('executeScript', () => {
-    it('debería manejar errores de autenticación', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No hay token de autenticación disponible');
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      // Ejecutar el script
+      const result = await ExecutorService.executeScript(selectedApp);
       
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      if (result.success) {
+        setExecutionMessage('Componente iniciado correctamente. Monitoreando estado...');
+        startPolling();
+      } else {
+        setExecutionMessage(`Error: ${result.message}`);
+        setIsExecuting(false);
+      }
+    } catch (error) {
+      console.error('Error generando componente:', error);
+      setExecutionMessage(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      setIsExecuting(false);
+    }
+  };
 
-      const result = await ExecutorService.executeScript('test-app');
+  const startPolling = () => {
+    const interval = setInterval(async () => {
+      try {
+        const status = await ExecutorService.getAppStatus(selectedApp);
+        if (status) {
+          setAppStatus(status);
+          
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Network error');
-    });
-  });
-
-  describe('getAppStatus', () => {
-    it('debería retornar null para aplicaciones no encontradas', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404
-      });
-
-      const result = await ExecutorService.getAppStatus('non-existent-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería incluir logs en la respuesta del status', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockStatusWithLogs = {
-        app: 'test-app',
-        startTime: '2024-01-01T00:00:00Z',
-        version: '1.0.0',
-        status: 'RUNNING',
-        logs: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            level: 'INFO',
-            message: 'Aplicación iniciada'
-          },
-          {
-            timestamp: '2024-01-01T00:01:00Z',
-            level: 'INFO',
-            message: 'Procesando componente'
+          if (status.logs && status.logs.length > 0) {
+            setLogs(status.logs);
           }
-        ]
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatusWithLogs
-      });
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toEqual(mockStatusWithLogs);
-      expect(result?.logs).toHaveLength(2);
-      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
-    });
-  });
 
 
-  describe('downloadGeneratedProject', () => {
-    it('debería manejar errores en la descarga', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+          if (status.status === 'COMPLETE') {
+            setExecutionMessage('Componente generado exitosamente y listo para descarga');
+            setIsExecuting(false);
+            stopPolling();
+          } else if (status.status === 'RUNNING') {
+            setExecutionMessage('Componente en ejecución...');
+          } else if (status.status === 'ERROR') {
+            setExecutionMessage('Error en la generación del componente');
+            setIsExecuting(false);
+            stopPolling();
+          }
+        }
+      } catch (error) {
+        console.error('Error en polling:', error);
+      }
+    }, 2000); 
+
+    setPollingInterval(interval);
+  };
+
+  const stopPolling = () => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!selectedApp) return;
+
+    try {
+      setIsDownloading(true);
+      const result = await ExecutorService.downloadGeneratedProject(selectedApp);
       
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}) // Sin base64
-      });
+      if (result.success) {
+        setExecutionMessage('Proyecto descargado exitosamente');
+      } else {
+        setExecutionMessage(`Error en descarga: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error descargando proyecto:', error);
+      setExecutionMessage(`Error en descarga: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
+  const closeLogModal = () => {
+    setShowLogModal(false);
+    stopPolling();
+    setIsExecuting(false);
+    setExecutionMessage('');
+    setAppStatus(null);
+    setLogs([]);
+    setShowLogs(false);
+    setIsDownloading(false);
+  };
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
-    });
-  });
-});
+  return (
+    <div className="generador-content">
+      <div className="generador-inner">
+        <h2>Validación de Estructura</h2>
+        
+
+         <div className="auth-info" style={{ 
+           background: '#f8f9fa', 
+           padding: '16px', 
+           borderRadius: '8px', 
+           marginBottom: '24px',
+           border: '1px solid #e9ecef'
+         }}>
+           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
+             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
+             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
+           </div>
+         </div>
+        
+        <form className="generador-form" autoComplete="off">
+          <div className="form-group search-container">
+            <label htmlFor="openapi-name">Nombre openAPI</label>
+            <div className="search-wrapper" ref={dropdownRef}>
+              <input
+                ref={searchInputRef}
+                type="text"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder={isSearching ? "Cargando aplicaciones..." : "Buscar aplicación..."}
+                className="search-input"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={() => setShowDropdown(true)}
+                autoComplete="off"
+                disabled={isSearching}
+              />
+              {showDropdown && filteredApps.length > 0 && (
+                <div className="search-dropdown">
+                  {filteredApps.map((app, index) => (
+                    <div
+                      key={index}
+                      className="dropdown-item"
+                      onClick={() => handleAppSelect(app)}
+                    >
+                      {app}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedApp && (
+              <div className="selected-app">
+                <span className="selected-label">Aplicación seleccionada:</span>
+                <span className="selected-value">{selectedApp}</span>
+              </div>
+            )}
+          </div>
+          <div className="button-group">
+            <button type="button" className="btn validar">Validar</button>
+            <button 
+              type="button" 
+              className={`btn generar ${selectedApp ? 'enabled' : 'disabled'}`}
+              onClick={handleGenerateComponent}
+              disabled={!selectedApp}
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+        <div className="tabla-container">
+          <table className="tabla-generador">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>path</th>
+                <th>Message</th>
+                <th>Severity</th>
+                <th>range</th>
+              </tr>
+            </thead>
+            <tbody>
+
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal de Logs */}
+      {showLogModal && (
+        <div className="modal-overlay">
+          <div className="log-modal" ref={logModalRef}>
+            <div className="modal-header">
+              <h3>Generación de Componente: {selectedApp}</h3>
+              <div className="header-actions">
+                <button 
+                  className="btn btn-toggle-logs" 
+                  onClick={() => setShowLogs(!showLogs)}
+                >
+                  {showLogs ? 'Ocultar Logs' : 'Ver Logs'}
+                </button>
+                <button className="close-button" onClick={closeLogModal}>×</button>
+              </div>
+            </div>
+            
+            <div className="modal-content">
+              <div className="execution-status">
+                <div className="status-message">{executionMessage}</div>
+                {appStatus && (
+                  <div className="app-status">
+                    <div className="status-item">
+                      <span className="status-label">Estado:</span>
+                      <span className={`status-value status-${appStatus.status.toLowerCase()}`}>
+                        {appStatus.status}
+                      </span>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">Versión:</span>
+                      <span className="status-value">{appStatus.version}</span>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">Inicio:</span>
+                      <span className="status-value">
+                        {new Date(appStatus.startTime).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {showLogs && logs.length > 0 && (
+                <div className="logs-section">
+                  <h4>Logs de Ejecución</h4>
+                  <div className="logs-container">
+                    {logs.map((log, index) => (
+                      <div key={index} className={`log-entry log-${log.level.toLowerCase()}`}>
+                        <span className="log-timestamp">
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </span>
+                        <span className="log-level">[{log.level}]</span>
+                        <span className="log-message">{log.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isExecuting && (
+                <div className="loading-indicator">
+                  <div className="spinner"></div>
+                  <span>Monitoreando estado...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              {appStatus?.status === 'COMPLETE' && (
+                <button 
+                  className="btn btn-download" 
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                >
+                  {isDownloading ? 'Descargando...' : 'Descargar Proyecto'}
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={closeLogModal}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Generador; 
