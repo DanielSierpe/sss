@@ -1,132 +1,190 @@
- ❯ src/services/__tests__/ExecutorService.test.ts (9)
-   ❯ ExecutorService (9)
-     ❯ searchApps (4)
-       × debería retornar todas las aplicaciones cuando no hay query
-       × debería filtrar aplicaciones por query
-       × debería ser case insensitive
-       × debería retornar array vacío para query sin coincidencias
-     ❯ executeScript (2)
-       × debería manejar errores de autenticación
-       × debería manejar errores de red
-     ❯ getAppStatus (2)
-       × debería retornar null para aplicaciones no encontradas
-       × debería incluir logs en la respuesta del status
-     ❯ downloadGeneratedProject (1)
-       × debería manejar errores en la descarga
- ✓ src/services/__tests__/HttpService.test.ts (14)
- ✓ src/services/__tests__/StorageService.test.ts (26)
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Mock de AuthService
+vi.mock('../AuthService', () => ({
+  default: {
+    getValidToken: vi.fn()
+  }
+}));
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > searchApps > debería retornar todas las aplicaciones cuando no hay query
-TypeError: ExecutorService.searchApps is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:69:44
-     67|   describe('searchApps', () => {
-     68|     it('debería retornar todas las aplicaciones cuando no hay query', async () => {
-     69|       const result = await ExecutorService.searchApps('');
-       |                                            ^
-     70|
-     71|       expect(result).toEqual([
+// Mock de import.meta.env usando vi.stubEnv
+vi.stubEnv('VITE_EXECUTOR_BASE_URL', 'http://platform.dcloud.cl.bsch/executor/v1');
+vi.stubEnv('VITE_EXECUTOR_EXECUTE_ENDPOINT', '/execute');
+vi.stubEnv('VITE_EXECUTOR_STATUS_ENDPOINT', '/status');
+vi.stubEnv('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', '/generated-project');
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+import { ExecutorService } from '../ExecutorService';
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > searchApps > debería filtrar aplicaciones por query
-TypeError: ExecutorService.searchApps is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:77:44
-     75| 
-     76|     it('debería filtrar aplicaciones por query', async () => {
-     77|       const result = await ExecutorService.searchApps('fraud');
-       |                                            ^
-     78|
-     79|       expect(result).toEqual([
+// Mock de fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+// Mock de atob y btoa
+global.atob = vi.fn();
+global.btoa = vi.fn();
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > searchApps > debería ser case insensitive
-TypeError: ExecutorService.searchApps is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:85:44
-     83|
-     84|     it('debería ser case insensitive', async () => {
-     85|       const result = await ExecutorService.searchApps('FRAUD');
-       |                                            ^
-     86|
-     87|       expect(result).toEqual([
+// Mock de window.URL
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL
+  }
+});
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+// Mock de document.createElement
+const mockLink = {
+  href: '',
+  download: '',
+  click: vi.fn()
+};
+const mockCreateElement = vi.fn(() => mockLink);
+Object.defineProperty(document, 'createElement', {
+  value: mockCreateElement
+});
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > searchApps > debería retornar array vacío para query sin coincidencias
-TypeError: ExecutorService.searchApps is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:93:44
-     91|
-     92|     it('debería retornar array vacío para query sin coincidencias', async () => {
-     93|       const result = await ExecutorService.searchApps('nonexistent');
-       |                                            ^
-     94|
-     95|       expect(result).toEqual([]);
+// Mock de document.body
+const mockBody = {
+  appendChild: vi.fn(),
+  removeChild: vi.fn()
+};
+Object.defineProperty(document, 'body', {
+  value: mockBody
+});
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+describe('ExecutorService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > executeScript > debería manejar errores de autenticación
-TypeError: ExecutorService.executeScript is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:104:44
-    102|       vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-    103|
-    104|       const result = await ExecutorService.executeScript('test-app');
-       |                                            ^
-    105|
-    106|       expect(result.success).toBe(false);
+  describe('searchApps', () => {
+    it('debería retornar todas las aplicaciones cuando no hay query', async () => {
+      const result = await ExecutorService.searchApps('');
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+      expect(result).toEqual([
+        'chl-dss-fraudlocal'
+      ]);
+    });
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > executeScript > debería manejar errores de red
-TypeError: ExecutorService.executeScript is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:118:44
-    116|       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-    117|
-    118|       const result = await ExecutorService.executeScript('test-app');
-       |                                            ^
-    119|
-    120|       expect(result.success).toBe(false);
+    it('debería filtrar aplicaciones por query', async () => {
+      const result = await ExecutorService.searchApps('fraud');
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+      expect(result).toEqual([
+        'chl-dss-fraudlocal'
+      ]);
+    });
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > getAppStatus > debería retornar null para aplicaciones no encontradas
-TypeError: ExecutorService.getAppStatus is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:136:44
-    134|       });
-    135|
-    136|       const result = await ExecutorService.getAppStatus('non-existent-app');
-       |                                            ^
-    137|
-    138|       expect(result).toBeNull();
+    it('debería ser case insensitive', async () => {
+      const result = await ExecutorService.searchApps('FRAUD');
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+      expect(result).toEqual([
+        'chl-dss-fraudlocal'
+      ]);
+    });
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > getAppStatus > debería incluir logs en la respuesta del status
-TypeError: ExecutorService.getAppStatus is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:170:44
-    168|       });
-    169|
-    170|       const result = await ExecutorService.getAppStatus('test-app');
-       |                                            ^
-    171|
-    172|       expect(result).toEqual(mockStatusWithLogs);
+    it('debería retornar array vacío para query sin coincidencias', async () => {
+      const result = await ExecutorService.searchApps('nonexistent');
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+      expect(result).toEqual([]);
+    });
+  });
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > downloadGeneratedProject > debería manejar errores en la descarga
-TypeError: ExecutorService.downloadGeneratedProject is not a function
- ❯ src/services/__tests__/ExecutorService.test.ts:190:44
-    188|       });
-    189|
-    190|       const result = await ExecutorService.downloadGeneratedProject('test-app');
-       |                                            ^
-    191|
-    192|       expect(result.success).toBe(false);
+  describe('executeScript', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+      const result = await ExecutorService.executeScript('test-app');
 
- Test Files  1 failed | 13 passed (14)
-      Tests  9 failed | 288 passed (297)
-   Start at  15:42:33
-   Duration  28.47s (transform 1.84s, setup 6.56s, collect 7.09s, tests 7.50s, environment 42.44s, prepare 5.48s)
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+  });
+
+  describe('getAppStatus', () => {
+    it('debería retornar null para aplicaciones no encontradas', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404
+      });
+
+      const result = await ExecutorService.getAppStatus('non-existent-app');
+
+      expect(result).toBeNull();
+    });
+
+    it('debería incluir logs en la respuesta del status', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockStatusWithLogs = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING',
+        logs: [
+          {
+            timestamp: '2024-01-01T00:00:00Z',
+            level: 'INFO',
+            message: 'Aplicación iniciada'
+          },
+          {
+            timestamp: '2024-01-01T00:01:00Z',
+            level: 'INFO',
+            message: 'Procesando componente'
+          }
+        ]
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatusWithLogs
+      });
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toEqual(mockStatusWithLogs);
+      expect(result?.logs).toHaveLength(2);
+      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    });
+  });
+
+
+  describe('downloadGeneratedProject', () => {
+    it('debería manejar errores en la descarga', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}) // Sin base64
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+    });
+  });
+});
