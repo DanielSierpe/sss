@@ -1,225 +1,224 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import AuthService from './AuthService';
 
-// Mock de localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
+export interface AppStatus {
+  app: string;
+  startTime: string;
+  version: string;
+  status: 'STARTING' | 'RUNNING' | 'COMPLETE' | 'STOPPED' | 'ERROR';
+  logs?: ExecutionLog[];
+}
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
+export interface ExecutionLog {
+  timestamp: string;
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+  message: string;
+}
 
-// Mock de fetch
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+export class ExecutorService {
+  private static readonly BASE_URL = import.meta.env.VITE_EXECUTOR_BASE_URL;
+  private static readonly EXECUTE_ENDPOINT = import.meta.env.VITE_EXECUTOR_EXECUTE_ENDPOINT;
+  private static readonly STATUS_ENDPOINT = import.meta.env.VITE_EXECUTOR_STATUS_ENDPOINT;
+  private static readonly GENERATED_PROJECT_ENDPOINT = import.meta.env.VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT;
 
-// Mock de btoa para Basic Auth
-global.btoa = vi.fn((str: string) => Buffer.from(str).toString('base64'));
+  /**
+   * Valida que las variables de entorno estén configuradas
+   */
+  private static validateConfig(): void {
+    const requiredVars = [
+      'VITE_EXECUTOR_BASE_URL',
+      'VITE_EXECUTOR_EXECUTE_ENDPOINT',
+      'VITE_EXECUTOR_STATUS_ENDPOINT',
+      'VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT'
+    ];
 
-// Importar AuthService después de configurar los mocks
-import AuthService from '../AuthService';
+    const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
+    
+    if (missingVars.length > 0) {
+      throw new Error(`Variables de entorno faltantes: ${missingVars.join(', ')}`);
+    }
+  }
 
-describe('AuthService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFetch.mockReset();
-
-    // Configurar variables de entorno
-    Object.defineProperty(import.meta, 'env', {
-      value: {
-        VITE_JWT_ENDPOINT: 'https://ssm.hcloud.cl.bsch/oauth/token',
-        VITE_REFRESH_ENDPOINT: 'https://ssm.dcloud.cl.bsch/oauth/token',
-        VITE_REDIRECT_URI: 'https://redirect.example.com',
-        VITE_CLIENT_ID: 'webtools',
-      },
-      writable: true,
-    });
-  });
-
-  describe('getStoredToken', () => {
-    it('debería retornar el token almacenado', () => {
-      localStorageMock.getItem.mockReturnValue('stored-token');
-      const result = AuthService.getStoredToken();
-      expect(localStorageMock.getItem).toHaveBeenCalledWith('access_token');
-      expect(result).toBe('stored-token');
-    });
-
-    it('debería retornar null si no hay token', () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      const result = AuthService.getStoredToken();
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('clearTokens', () => {
-    it('debería limpiar todos los tokens del localStorage', () => {
-      const consoleSpy = vi.spyOn(console, 'log');
-      AuthService.clearTokens();
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_type');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_in');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_at');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
-      expect(consoleSpy).toHaveBeenCalledWith('Tokens limpiados del localStorage');
-      consoleSpy.mockRestore();
-    });
-  });
-
-  describe('isTokenExpired', () => {
-    it('debería retornar true si no hay fecha de expiración', () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      const result = AuthService.isTokenExpired();
-      expect(result).toBe(true);
-    });
-
-    it('debería retornar true si el token está expirado', () => {
-      const pastTime = new Date().getTime() - 1000;
-      localStorageMock.getItem.mockReturnValue(pastTime.toString());
-      const result = AuthService.isTokenExpired();
-      expect(result).toBe(true);
-    });
-
-    it('debería retornar false si el token no está expirado', () => {
-      const futureTime = new Date().getTime() + 1000000;
-      localStorageMock.getItem.mockReturnValue(futureTime.toString());
-      const result = AuthService.isTokenExpired();
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('getAuthHeader', () => {
-    it('debería retornar el header de autorización con token válido', () => {
-      const futureTime = new Date().getTime() + 1000000;
-      localStorageMock.getItem
-        .mockReturnValueOnce('test-token')
-        .mockReturnValueOnce('Bearer')
-        .mockReturnValueOnce(futureTime.toString());
-      const result = AuthService.getAuthHeader();
-      expect(result).toBe('Bearer test-token');
-    });
-
-    it('debería retornar null si no hay token', () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      const result = AuthService.getAuthHeader();
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('getJWTToken (directo a backend)', () => {
-    it('debería llamar al endpoint con POST y x-www-form-urlencoded sin client_id', async () => {
-      const responseBody = {
-        access_token: 'acc',
-        token_type: 'Bearer',
-        expires_in: 3600,
-        refresh_token: 'ref',
-      };
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: vi.fn().mockResolvedValue(responseBody),
-      } as any);
-
-      await AuthService.getJWTToken('code123');
-
-      // Verificar URL y body mediante la primera llamada
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [calledUrl, calledOptions] = (mockFetch.mock.calls[0] ?? []) as [string, any];
-      expect(calledUrl).toBe('https://ssm.hcloud.cl.bsch/oauth/token');
-      expect(calledOptions).toEqual(expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'oauth_type': 'iam',
-          'true-client-ip': '0.0.0.0',
-          Authorization: expect.stringContaining('Basic '),
-        }),
-        credentials: 'include',
-        mode: 'cors',
-      }));
-      const bodySent = String(calledOptions?.body ?? '');
-      expect(bodySent).toContain('grant_type=authorization_code');
-      expect(bodySent).toContain('code=code123');
-      expect(bodySent).toContain('redirect_uri=');
-      expect(bodySent).not.toContain('client_id=');
-
-      // Verificar guardado
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'acc');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_type', 'Bearer');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'ref');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
-    });
-
-    it('debería manejar respuesta no OK', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 400,
-        statusText: 'Bad Request',
-        text: vi.fn().mockResolvedValue('bad'),
-      } as any);
-
-      await expect(AuthService.getJWTToken('badcode')).rejects.toThrow('Error al obtener token: 400 Bad Request');
-    });
-  });
-
-  describe('refreshToken (directo a backend)', () => {
-    it('debería llamar al endpoint con POST y guardar token', async () => {
-      localStorageMock.getItem
-        .mockReturnValueOnce('ref') 
-        .mockReturnValueOnce('acc'); 
-
-      const responseBody = {
-        access_token: 'new-acc',
-        token_type: 'Bearer',
-        expires_in: 1800,
-        refresh_token: 'new-ref',
-      };
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: vi.fn().mockResolvedValue(responseBody),
-      } as any);
-
-      const result = await AuthService.refreshToken();
-      expect(result?.access_token).toBe('new-acc');
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://ssm.dcloud.cl.bsch/oauth/token',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
-          body: expect.stringContaining('grant_type=refresh_token'),
-        })
-      );
-    });
-
-    it('debería usar expiración por defecto si expires_in no viene', async () => {
-      localStorageMock.getItem
-        .mockReturnValueOnce('ref') 
-        .mockReturnValueOnce('acc');
-
-      const responseBody = {
-        access_token: 'na',
-        token_type: 'Bearer',
-
-      } as any;
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        statusText: 'OK',
-        json: vi.fn().mockResolvedValue(responseBody),
-      } as any);
-
-      await AuthService.refreshToken();
-
+  /**
+   * Ejecuta un script para generar un componente
+   */
+  static async executeScript(appName: string): Promise<{ success: boolean; message: string }> {
+    try {
+      this.validateConfig();
       
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
-    });
-  });
-});
+      const token = await AuthService.getValidToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+
+      const url = `${this.BASE_URL}${this.EXECUTE_ENDPOINT}?app-name=${encodeURIComponent(appName)}`;
+      
+      console.log('Ejecutando script para:', appName);
+      console.log('URL:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Script ejecutado exitosamente:', result);
+      
+      return {
+        success: true,
+        message: `Componente ${appName} iniciado correctamente`
+      };
+    } catch (error) {
+      console.error('Error ejecutando script:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  /**
+   * Obtiene el estado de una aplicación
+   */
+  static async getAppStatus(appName: string): Promise<AppStatus | null> {
+    try {
+      this.validateConfig();
+      
+      const token = await AuthService.getValidToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+
+      const url = `${this.BASE_URL}${this.STATUS_ENDPOINT}/${encodeURIComponent(appName)}`;
+      
+      console.log('Obteniendo estado de la app:', appName);
+      console.log('URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null; // App no encontrada
+        }
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const status: AppStatus = await response.json();
+      return status;
+    } catch (error) {
+      console.error('Error obteniendo estado de la app:', error);
+      return null;
+    }
+  }
+
+
+  /**
+   * Descarga el proyecto generado como ZIP
+   */
+  static async downloadGeneratedProject(appName: string): Promise<{ success: boolean; message: string }> {
+    try {
+      this.validateConfig();
+      
+      const token = await AuthService.getValidToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación disponible');
+      }
+
+      const url = `${this.BASE_URL}${this.GENERATED_PROJECT_ENDPOINT}?app=${encodeURIComponent(appName)}`;
+      
+      console.log('Descargando proyecto generado para:', appName);
+      console.log('URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      // Asumimos que la respuesta contiene el base64 del ZIP
+      if (result.base64 || result.data) {
+        const base64Data = result.base64 || result.data;
+        const fileName = `${appName}-generated-project.zip`;
+        
+        // Convertir base64 a blob y descargar
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/zip' });
+        
+        // Crear enlace de descarga
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        return {
+          success: true,
+          message: `Proyecto ${appName} descargado exitosamente`
+        };
+      } else {
+        throw new Error('No se encontró el contenido del proyecto en la respuesta');
+      }
+    } catch (error) {
+      console.error('Error descargando proyecto:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  /**
+   * Busca aplicaciones disponibles (simulado - en un caso real vendría de una API)
+   */
+  static async searchApps(query: string): Promise<string[]> {
+    // Simulamos una búsqueda de aplicaciones disponibles
+    // En un caso real, esto vendría de una API que liste las apps disponibles
+    const availableApps = [
+      'chl-dss-fraudlocal',
+      'chl-dss-fraudprod',
+      'chl-dss-risklocal',
+      'chl-dss-riskprod',
+      'chl-dss-compliance',
+      'chl-dss-monitoring',
+      'chl-dss-analytics',
+      'chl-dss-reporting'
+    ];
+
+    if (!query.trim()) {
+      return availableApps;
+    }
+
+    return availableApps.filter(app => 
+      app.toLowerCase().includes(query.toLowerCase())
+    );
+  }
+}
