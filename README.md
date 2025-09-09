@@ -1,4 +1,4 @@
-❯ src/services/__tests__/ExecutorService.test.ts (9)
+ ❯ src/services/__tests__/ExecutorService.test.ts (9)
    ❯ ExecutorService (9)
      ✓ searchApps (4)
      ❯ executeScript (2)
@@ -20,13 +20,13 @@ AssertionError: expected 'Variables de entorno faltantes: VITE_…' to be 'No ha
 Expected: "No hay token de autenticación disponible"
 Received: "Variables de entorno faltantes: VITE_EXECUTOR_BASE_URL, VITE_EXECUTOR_EXECUTE_ENDPOINT, VITE_EXECUTOR_STATUS_ENDPOINT, VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT"
 
- ❯ src/services/__tests__/ExecutorService.test.ts:104:30
-    102| 
-    103|       expect(result.success).toBe(false);
-    104|       expect(result.message).toBe('No hay token de autenticación disponible');
+ ❯ src/services/__tests__/ExecutorService.test.ts:106:30
+    104| 
+    105|       expect(result.success).toBe(false);
+    106|       expect(result.message).toBe('No hay token de autenticación disponible');
        |                              ^
-    105|       expect(mockFetch).not.toHaveBeenCalled();
-    106|     });
+    107|       expect(mockFetch).not.toHaveBeenCalled();
+    108|     });
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
 
@@ -36,13 +36,13 @@ AssertionError: expected 'Variables de entorno faltantes: VITE_…' to be 'Netwo
 Expected: "Network error"
 Received: "Variables de entorno faltantes: VITE_EXECUTOR_BASE_URL, VITE_EXECUTOR_EXECUTE_ENDPOINT, VITE_EXECUTOR_STATUS_ENDPOINT, VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT"
 
- ❯ src/services/__tests__/ExecutorService.test.ts:118:30
-    116|
-    117|       expect(result.success).toBe(false);
-    118|       expect(result.message).toBe('Network error');
+ ❯ src/services/__tests__/ExecutorService.test.ts:120:30
+    118|
+    119|       expect(result.success).toBe(false);
+    120|       expect(result.message).toBe('Network error');
        |                              ^
-    119|     });
-    120|   });
+    121|     });
+    122|   });
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
 
@@ -72,13 +72,13 @@ Object {
 + Received:
 null
 
- ❯ src/services/__tests__/ExecutorService.test.ts:169:22
-    167|       const result = await ExecutorService.getAppStatus('test-app');
-    168|
-    169|       expect(result).toEqual(mockStatusWithLogs);
+ ❯ src/services/__tests__/ExecutorService.test.ts:171:22
+    169|       const result = await ExecutorService.getAppStatus('test-app');
+    170|
+    171|       expect(result).toEqual(mockStatusWithLogs);
        |                      ^
-    170|       expect(result?.logs).toHaveLength(2);
-    171|       expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    172|       expect(result?.logs).toHaveLength(2);
+    173|       expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
 
@@ -88,17 +88,17 @@ AssertionError: expected 'Variables de entorno faltantes: VITE_…' to be 'No se
 Expected: "No se encontró el contenido del proyecto en la respuesta"
 Received: "Variables de entorno faltantes: VITE_EXECUTOR_BASE_URL, VITE_EXECUTOR_EXECUTE_ENDPOINT, VITE_EXECUTOR_STATUS_ENDPOINT, VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT"
 
- ❯ src/services/__tests__/ExecutorService.test.ts:190:30
-    188| 
-    189|       expect(result.success).toBe(false);
-    190|       expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+ ❯ src/services/__tests__/ExecutorService.test.ts:192:30
+    190|
+    191|       expect(result.success).toBe(false);
+    192|       expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
        |                              ^
-    191|     });
-    192|   });
+    193|     });
+    194|   });
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
 
  Test Files  1 failed | 13 passed (14)
       Tests  4 failed | 293 passed (297)
-   Start at  15:35:35
-   Duration  27.04s (transform 2.48s, setup 6.75s, collect 7.64s, tests 7.90s, environment 41.45s, prepare 4.77s)
+   Start at  15:38:47
+   Duration  27.28s (transform 1.20s, setup 6.42s, collect 5.74s, tests 8.44s, environment 44.20s, prepare 4.57s)
