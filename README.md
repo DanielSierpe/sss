@@ -1,104 +1,196 @@
- ❯ src/services/__tests__/ExecutorService.test.ts (9)
-   ❯ ExecutorService (9)
-     ✓ searchApps (4)
-     ❯ executeScript (2)
-       × debería manejar errores de autenticación
-       × debería manejar errores de red
-     ❯ getAppStatus (2)
-       ✓ debería retornar null para aplicaciones no encontradas
-       × debería incluir logs en la respuesta del status
-     ❯ downloadGeneratedProject (1)
-       × debería manejar errores en la descarga
- ✓ src/services/__tests__/HttpService.test.ts (14)
- ✓ src/services/__tests__/StorageService.test.ts (26)
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Mock de AuthService
+vi.mock('../AuthService', () => ({
+  default: {
+    getValidToken: vi.fn()
+  }
+}));
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > executeScript > debería manejar errores de autenticación
-AssertionError: expected 'Variables de entorno faltantes: VITE_…' to be 'No hay token de autenticación disponi…' // Object.is equality
+// Mock del módulo ExecutorService completo
+vi.mock('../ExecutorService', async () => {
+  const actual = await vi.importActual('../ExecutorService') as any;
+  return {
+    ExecutorService: {
+      ...actual.ExecutorService,
+      // Sobrescribir el método validateConfig para que no valide las variables de entorno
+      validateConfig: vi.fn()
+    }
+  };
+});
 
-Expected: "No hay token de autenticación disponible"
-Received: "Variables de entorno faltantes: VITE_EXECUTOR_BASE_URL, VITE_EXECUTOR_EXECUTE_ENDPOINT, VITE_EXECUTOR_STATUS_ENDPOINT, VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT"
+import { ExecutorService } from '../ExecutorService';
 
- ❯ src/services/__tests__/ExecutorService.test.ts:106:30
-    104| 
-    105|       expect(result.success).toBe(false);
-    106|       expect(result.message).toBe('No hay token de autenticación disponible');
-       |                              ^
-    107|       expect(mockFetch).not.toHaveBeenCalled();
-    108|     });
+// Mock de fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+// Mock de atob y btoa
+global.atob = vi.fn();
+global.btoa = vi.fn();
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > executeScript > debería manejar errores de red
-AssertionError: expected 'Variables de entorno faltantes: VITE_…' to be 'Network error' // Object.is equality
+// Mock de window.URL
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL
+  }
+});
 
-Expected: "Network error"
-Received: "Variables de entorno faltantes: VITE_EXECUTOR_BASE_URL, VITE_EXECUTOR_EXECUTE_ENDPOINT, VITE_EXECUTOR_STATUS_ENDPOINT, VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT"
+// Mock de document.createElement
+const mockLink = {
+  href: '',
+  download: '',
+  click: vi.fn()
+};
+const mockCreateElement = vi.fn(() => mockLink);
+Object.defineProperty(document, 'createElement', {
+  value: mockCreateElement
+});
 
- ❯ src/services/__tests__/ExecutorService.test.ts:120:30
-    118|
-    119|       expect(result.success).toBe(false);
-    120|       expect(result.message).toBe('Network error');
-       |                              ^
-    121|     });
-    122|   });
+// Mock de document.body
+const mockBody = {
+  appendChild: vi.fn(),
+  removeChild: vi.fn()
+};
+Object.defineProperty(document, 'body', {
+  value: mockBody
+});
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+describe('ExecutorService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > getAppStatus > debería incluir logs en la respuesta del status
-AssertionError: expected null to deeply equal { app: 'test-app', …(4) }
+  describe('searchApps', () => {
+    it('debería retornar todas las aplicaciones cuando no hay query', async () => {
+      const result = await ExecutorService.searchApps('');
 
-- Expected:
-Object {
-  "app": "test-app",
-  "logs": Array [
-    Object {
-      "level": "INFO",
-      "message": "Aplicación iniciada",
-      "timestamp": "2024-01-01T00:00:00Z",
-    },
-    Object {
-      "level": "INFO",
-      "message": "Procesando componente",
-      "timestamp": "2024-01-01T00:01:00Z",
-    },
-  ],
-  "startTime": "2024-01-01T00:00:00Z",
-  "status": "RUNNING",
-  "version": "1.0.0",
-}
+      expect(result).toEqual([
+        'chl-dss-fraudlocal'
+      ]);
+    });
 
-+ Received:
-null
+    it('debería filtrar aplicaciones por query', async () => {
+      const result = await ExecutorService.searchApps('fraud');
 
- ❯ src/services/__tests__/ExecutorService.test.ts:171:22
-    169|       const result = await ExecutorService.getAppStatus('test-app');
-    170|
-    171|       expect(result).toEqual(mockStatusWithLogs);
-       |                      ^
-    172|       expect(result?.logs).toHaveLength(2);
-    173|       expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+      expect(result).toEqual([
+        'chl-dss-fraudlocal'
+      ]);
+    });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+    it('debería ser case insensitive', async () => {
+      const result = await ExecutorService.searchApps('FRAUD');
 
- FAIL  src/services/__tests__/ExecutorService.test.ts > ExecutorService > downloadGeneratedProject > debería manejar errores en la descarga
-AssertionError: expected 'Variables de entorno faltantes: VITE_…' to be 'No se encontró el contenido del proye…' // Object.is equality
+      expect(result).toEqual([
+        'chl-dss-fraudlocal'
+      ]);
+    });
 
-Expected: "No se encontró el contenido del proyecto en la respuesta"
-Received: "Variables de entorno faltantes: VITE_EXECUTOR_BASE_URL, VITE_EXECUTOR_EXECUTE_ENDPOINT, VITE_EXECUTOR_STATUS_ENDPOINT, VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT"
+    it('debería retornar array vacío para query sin coincidencias', async () => {
+      const result = await ExecutorService.searchApps('nonexistent');
 
- ❯ src/services/__tests__/ExecutorService.test.ts:192:30
-    190|
-    191|       expect(result.success).toBe(false);
-    192|       expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
-       |                              ^
-    193|     });
-    194|   });
+      expect(result).toEqual([]);
+    });
+  });
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+  describe('executeScript', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
 
- Test Files  1 failed | 13 passed (14)
-      Tests  4 failed | 293 passed (297)
-   Start at  15:38:47
-   Duration  27.28s (transform 1.20s, setup 6.42s, collect 5.74s, tests 8.44s, environment 44.20s, prepare 4.57s)
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+  });
+
+  describe('getAppStatus', () => {
+    it('debería retornar null para aplicaciones no encontradas', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404
+      });
+
+      const result = await ExecutorService.getAppStatus('non-existent-app');
+
+      expect(result).toBeNull();
+    });
+
+    it('debería incluir logs en la respuesta del status', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockStatusWithLogs = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING',
+        logs: [
+          {
+            timestamp: '2024-01-01T00:00:00Z',
+            level: 'INFO',
+            message: 'Aplicación iniciada'
+          },
+          {
+            timestamp: '2024-01-01T00:01:00Z',
+            level: 'INFO',
+            message: 'Procesando componente'
+          }
+        ]
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatusWithLogs
+      });
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toEqual(mockStatusWithLogs);
+      expect(result?.logs).toHaveLength(2);
+      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    });
+  });
+
+
+  describe('downloadGeneratedProject', () => {
+    it('debería manejar errores en la descarga', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}) // Sin base64
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+    });
+  });
+});
