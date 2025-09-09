@@ -1,380 +1,529 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuthContext } from '../contexts/AuthContext';
-import { ExecutorService } from '../services/ExecutorService';
-import type { AppStatus, ExecutionLog } from '../services/ExecutorService';
-import './Generador.css';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Generador from '../Generador';
+import { useAuthContext } from '../../contexts/AuthContext';
+import { ExecutorService } from '../../services/ExecutorService';
+import type { AppStatus } from '../../services/ExecutorService';
 
-const Generador: React.FC = () => {
-  const { isAuthenticated, token, isLoading } = useAuthContext();
-  
-  // Estados para la búsqueda y selección
-  const [searchQuery, setSearchQuery] = useState('');
-  const [availableApps, setAvailableApps] = useState<string[]>([]);
-  const [filteredApps, setFilteredApps] = useState<string[]>([]);
-  const [selectedApp, setSelectedApp] = useState<string>('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  
-  // Estados para el modal de logs
-  const [showLogModal, setShowLogModal] = useState(false);
-  const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [executionMessage, setExecutionMessage] = useState('');
-  const [showLogs, setShowLogs] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  
-  // Referencias
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const logModalRef = useRef<HTMLDivElement>(null);
-  
-  // Polling para actualizar el estado
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+// Mock del contexto de autenticación
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuthContext: vi.fn()
+}));
 
-  // Cargar aplicaciones disponibles al montar el componente
-  useEffect(() => {
-    loadAvailableApps();
-  }, []);
+// Mock del ExecutorService
+vi.mock('../../services/ExecutorService', () => ({
+  ExecutorService: {
+    searchApps: vi.fn(),
+    executeScript: vi.fn(),
+    getAppStatus: vi.fn(),
+    downloadGeneratedProject: vi.fn()
+  }
+}));
 
-  // Filtrar aplicaciones cuando cambia la búsqueda
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const filtered = availableApps.filter(app => 
-        app.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredApps(filtered);
-    } else {
-      setFilteredApps(availableApps);
-    }
-  }, [searchQuery, availableApps]);
+// Mock de timers
+vi.useFakeTimers();
 
-  // Limpiar polling al desmontar
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
+describe('Generador', () => {
+  const mockUseAuthContext = vi.mocked(useAuthContext);
+  const mockExecutorService = vi.mocked(ExecutorService);
+
+  const mockApps = ['app1', 'app2', 'app3', 'test-app'];
+  const mockToken = 'mock-jwt-token';
+
+  const mockAppStatus: AppStatus = {
+    app: 'test-app',
+    startTime: '2024-01-01T00:00:00Z',
+    version: '1.0.0',
+    status: 'RUNNING',
+    logs: [
+      {
+        timestamp: '2024-01-01T00:00:00Z',
+        level: 'INFO',
+        message: 'Aplicación iniciada'
+      },
+      {
+        timestamp: '2024-01-01T00:01:00Z',
+        level: 'INFO',
+        message: 'Procesando componente'
       }
-    };
-  }, [pollingInterval]);
-
-  // Cerrar dropdown al hacer clic fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-      if (logModalRef.current && !logModalRef.current.contains(event.target as Node)) {
-        setShowLogModal(false);
-        stopPolling();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const loadAvailableApps = async () => {
-    try {
-      setIsSearching(true);
-      const apps = await ExecutorService.searchApps('');
-      setAvailableApps(apps);
-      setFilteredApps(apps);
-    } catch (error) {
-      console.error('Error cargando aplicaciones:', error);
-    } finally {
-      setIsSearching(false);
-    }
+    ]
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    setShowDropdown(true);
+  beforeEach(() => {
+    // Configurar mock del contexto de autenticación
+    mockUseAuthContext.mockReturnValue({
+      isAuthenticated: true,
+      token: mockToken,
+      isLoading: false,
+      error: null,
+      handleAuthCode: vi.fn(),
+      logout: vi.fn()
+    });
+
+    // Configurar mocks del ExecutorService
+    mockExecutorService.searchApps.mockResolvedValue(mockApps);
+    mockExecutorService.executeScript.mockResolvedValue({ success: true, message: 'Script ejecutado' });
+    mockExecutorService.getAppStatus.mockResolvedValue(mockAppStatus);
+    mockExecutorService.downloadGeneratedProject.mockResolvedValue({ success: true, message: 'Descarga exitosa' });
+
+    // Limpiar timers
+    vi.clearAllTimers();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.runOnlyPendingTimers();
+  });
+
+  it('debería renderizar correctamente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    expect(screen.getByText('Validación de Estructura')).toBeInTheDocument();
+    expect(screen.getByText('Estado de Autenticación')).toBeInTheDocument();
+    expect(screen.getByText('Sí')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Buscar aplicación...')).toBeInTheDocument();
+    expect(screen.getByText('Validar')).toBeInTheDocument();
+    expect(screen.getByText('Generar componente')).toBeInTheDocument();
+  });
+
+  it('debería cargar aplicaciones al montar el componente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    expect(mockExecutorService.searchApps).toHaveBeenCalledWith('');
+  });
+
+  it('debería filtrar aplicaciones al escribir en el campo de búsqueda', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
     
-    if (value !== selectedApp) {
-      setSelectedApp('');
-    }
-  };
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: 'app1' } });
+    });
 
-  const handleAppSelect = (app: string) => {
-    setSelectedApp(app);
-    setSearchQuery(app);
-    setShowDropdown(false);
-  };
+    expect(screen.getByText('app1')).toBeInTheDocument();
+    expect(screen.queryByText('app2')).not.toBeInTheDocument();
+  });
 
-  const handleGenerateComponent = async () => {
-    if (!selectedApp) return;
+  it('debería mostrar dropdown al hacer focus en el campo de búsqueda', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-    try {
-      setIsExecuting(true);
-      setExecutionMessage('Iniciando generación del componente...');
-      setShowLogModal(true);
-      setLogs([]);
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-      // Ejecutar el script
-      const result = await ExecutorService.executeScript(selectedApp);
-      
-      if (result.success) {
-        setExecutionMessage('Componente iniciado correctamente. Monitoreando estado...');
-        startPolling();
-      } else {
-        setExecutionMessage(`Error: ${result.message}`);
-        setIsExecuting(false);
-      }
-    } catch (error) {
-      console.error('Error generando componente:', error);
-      setExecutionMessage(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-      setIsExecuting(false);
-    }
-  };
+    expect(screen.getByText('app1')).toBeInTheDocument();
+    expect(screen.getByText('app2')).toBeInTheDocument();
+  });
 
-  const startPolling = () => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await ExecutorService.getAppStatus(selectedApp);
-        if (status) {
-          setAppStatus(status);
-          
+  it('debería seleccionar una aplicación al hacer clic en el dropdown', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-          if (status.logs && status.logs.length > 0) {
-            setLogs(status.logs);
-          }
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    expect(screen.getByText('Aplicación seleccionada:')).toBeInTheDocument();
+    expect(screen.getByText('app1')).toBeInTheDocument();
+  });
+
+  it('debería habilitar el botón generar cuando se selecciona una aplicación', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    const generateButton = screen.getByText('Generar componente');
+    
+
+    expect(generateButton).toBeDisabled();
+
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
 
 
-          if (status.status === 'COMPLETE') {
-            setExecutionMessage('Componente generado exitosamente y listo para descarga');
-            setIsExecuting(false);
-            stopPolling();
-          } else if (status.status === 'RUNNING') {
-            setExecutionMessage('Componente en ejecución...');
-          } else if (status.status === 'ERROR') {
-            setExecutionMessage('Error en la generación del componente');
-            setIsExecuting(false);
-            stopPolling();
-          }
-        }
-      } catch (error) {
-        console.error('Error en polling:', error);
-      }
-    }, 2000); 
+    expect(generateButton).not.toBeDisabled();
+  });
 
-    setPollingInterval(interval);
-  };
+  it('debería ejecutar el script y mostrar el modal al hacer clic en generar', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-  const stopPolling = () => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
-    }
-  };
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-  const handleDownload = async () => {
-    if (!selectedApp) return;
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
 
-    try {
-      setIsDownloading(true);
-      const result = await ExecutorService.downloadGeneratedProject(selectedApp);
-      
-      if (result.success) {
-        setExecutionMessage('Proyecto descargado exitosamente');
-      } else {
-        setExecutionMessage(`Error en descarga: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('Error descargando proyecto:', error);
-      setExecutionMessage(`Error en descarga: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
 
-  const closeLogModal = () => {
-    setShowLogModal(false);
-    stopPolling();
-    setIsExecuting(false);
-    setExecutionMessage('');
-    setAppStatus(null);
-    setLogs([]);
-    setShowLogs(false);
-    setIsDownloading(false);
-  };
+    expect(mockExecutorService.executeScript).toHaveBeenCalledWith('app1');
+    expect(screen.getByText('Generación de Componente: app1')).toBeInTheDocument();
+    expect(screen.getByText('Componente iniciado correctamente. Monitoreando estado...')).toBeInTheDocument();
+  });
 
-  return (
-    <div className="generador-content">
-      <div className="generador-inner">
-        <h2>Validación de Estructura</h2>
-        
+  it('debería iniciar el polling después de ejecutar el script exitosamente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-         <div className="auth-info" style={{ 
-           background: '#f8f9fa', 
-           padding: '16px', 
-           borderRadius: '8px', 
-           marginBottom: '24px',
-           border: '1px solid #e9ecef'
-         }}>
-           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
-             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
-             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
-           </div>
-         </div>
-        
-        <form className="generador-form" autoComplete="off">
-          <div className="form-group search-container">
-            <label htmlFor="openapi-name">Nombre openAPI</label>
-            <div className="search-wrapper" ref={dropdownRef}>
-              <input
-                ref={searchInputRef}
-                type="text"
-                id="openapi-name"
-                name="openapi-name"
-                placeholder={isSearching ? "Cargando aplicaciones..." : "Buscar aplicación..."}
-                className="search-input"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onFocus={() => setShowDropdown(true)}
-                autoComplete="off"
-                disabled={isSearching}
-              />
-              {showDropdown && filteredApps.length > 0 && (
-                <div className="search-dropdown">
-                  {filteredApps.map((app, index) => (
-                    <div
-                      key={index}
-                      className="dropdown-item"
-                      onClick={() => handleAppSelect(app)}
-                    >
-                      {app}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedApp && (
-              <div className="selected-app">
-                <span className="selected-label">Aplicación seleccionada:</span>
-                <span className="selected-value">{selectedApp}</span>
-              </div>
-            )}
-          </div>
-          <div className="button-group">
-            <button type="button" className="btn validar">Validar</button>
-            <button 
-              type="button" 
-              className={`btn generar ${selectedApp ? 'enabled' : 'disabled'}`}
-              onClick={handleGenerateComponent}
-              disabled={!selectedApp}
-            >
-              Generar componente
-            </button>
-          </div>
-        </form>
-        <div className="tabla-container">
-          <table className="tabla-generador">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>path</th>
-                <th>Message</th>
-                <th>Severity</th>
-                <th>range</th>
-              </tr>
-            </thead>
-            <tbody>
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-            </tbody>
-          </table>
-        </div>
-      </div>
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
 
-      {/* Modal de Logs */}
-      {showLogModal && (
-        <div className="modal-overlay">
-          <div className="log-modal" ref={logModalRef}>
-            <div className="modal-header">
-              <h3>Generación de Componente: {selectedApp}</h3>
-              <div className="header-actions">
-                <button 
-                  className="btn btn-toggle-logs" 
-                  onClick={() => setShowLogs(!showLogs)}
-                >
-                  {showLogs ? 'Ocultar Logs' : 'Ver Logs'}
-                </button>
-                <button className="close-button" onClick={closeLogModal}>×</button>
-              </div>
-            </div>
-            
-            <div className="modal-content">
-              <div className="execution-status">
-                <div className="status-message">{executionMessage}</div>
-                {appStatus && (
-                  <div className="app-status">
-                    <div className="status-item">
-                      <span className="status-label">Estado:</span>
-                      <span className={`status-value status-${appStatus.status.toLowerCase()}`}>
-                        {appStatus.status}
-                      </span>
-                    </div>
-                    <div className="status-item">
-                      <span className="status-label">Versión:</span>
-                      <span className="status-value">{appStatus.version}</span>
-                    </div>
-                    <div className="status-item">
-                      <span className="status-label">Inicio:</span>
-                      <span className="status-value">
-                        {new Date(appStatus.startTime).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
 
-              {showLogs && logs.length > 0 && (
-                <div className="logs-section">
-                  <h4>Logs de Ejecución</h4>
-                  <div className="logs-container">
-                    {logs.map((log, index) => (
-                      <div key={index} className={`log-entry log-${log.level.toLowerCase()}`}>
-                        <span className="log-timestamp">
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </span>
-                        <span className="log-level">[{log.level}]</span>
-                        <span className="log-message">{log.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
 
-              {isExecuting && (
-                <div className="loading-indicator">
-                  <div className="spinner"></div>
-                  <span>Monitoreando estado...</span>
-                </div>
-              )}
-            </div>
+    expect(mockExecutorService.getAppStatus).toHaveBeenCalledWith('app1');
+  });
 
-            <div className="modal-footer">
-              {appStatus?.status === 'COMPLETE' && (
-                <button 
-                  className="btn btn-download" 
-                  onClick={handleDownload}
-                  disabled={isDownloading}
-                >
-                  {isDownloading ? 'Descargando...' : 'Descargar Proyecto'}
-                </button>
-              )}
-              <button className="btn btn-secondary" onClick={closeLogModal}>
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+  it('debería mostrar logs cuando están disponibles en el status', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-export default Generador; 
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const toggleLogsButton = screen.getByText('Ver Logs');
+    
+    await act(async () => {
+      fireEvent.click(toggleLogsButton);
+    });
+
+    expect(screen.getByText('Logs de Ejecución')).toBeInTheDocument();
+    expect(screen.getByText('Aplicación iniciada')).toBeInTheDocument();
+    expect(screen.getByText('Procesando componente')).toBeInTheDocument();
+  });
+
+  it('debería mostrar el botón de descarga cuando el estado es COMPLETE', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'COMPLETE'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('Descargar Proyecto')).toBeInTheDocument();
+  });
+
+  it('debería descargar el proyecto cuando se hace clic en el botón de descarga', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'COMPLETE'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+  
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const downloadButton = screen.getByText('Descargar Proyecto');
+    
+    await act(async () => {
+      fireEvent.click(downloadButton);
+    });
+
+    expect(mockExecutorService.downloadGeneratedProject).toHaveBeenCalledWith('app1');
+  });
+
+  it('debería cerrar el modal y detener el polling al hacer clic en cerrar', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    const closeButton = screen.getByText('Cerrar');
+    
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    expect(screen.queryByText('Generación de Componente: app1')).not.toBeInTheDocument();
+  });
+
+  it('debería manejar errores en la ejecución del script', async () => {
+    mockExecutorService.executeScript.mockRejectedValue(new Error('Error de ejecución'));
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    expect(screen.getByText('Error: Error de ejecución')).toBeInTheDocument();
+  });
+
+  it('debería manejar errores en la descarga del proyecto', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'COMPLETE'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+    mockExecutorService.downloadGeneratedProject.mockRejectedValue(new Error('Error de descarga'));
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+ 
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const downloadButton = screen.getByText('Descargar Proyecto');
+    
+    await act(async () => {
+      fireEvent.click(downloadButton);
+    });
+
+    expect(screen.getByText('Error en descarga: Error de descarga')).toBeInTheDocument();
+  });
+
+  it('debería mostrar el estado correcto según el status de la aplicación', async () => {
+    const errorStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'ERROR'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(errorStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('Error en la generación del componente')).toBeInTheDocument();
+  });
+
+  it('debería limpiar el polling al desmontar el componente', async () => {
+    const { unmount } = await act(async () => {
+      return render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    unmount();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+
+    expect(mockExecutorService.getAppStatus).toHaveBeenCalledTimes(0);
+  });
+});
