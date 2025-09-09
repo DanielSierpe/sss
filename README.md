@@ -1,224 +1,192 @@
-import AuthService from './AuthService';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ExecutorService } from '../ExecutorService';
 
-export interface AppStatus {
-  app: string;
-  startTime: string;
-  version: string;
-  status: 'STARTING' | 'RUNNING' | 'COMPLETE' | 'STOPPED' | 'ERROR';
-  logs?: ExecutionLog[];
-}
-
-export interface ExecutionLog {
-  timestamp: string;
-  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
-  message: string;
-}
-
-export class ExecutorService {
-  private static readonly BASE_URL = import.meta.env.VITE_EXECUTOR_BASE_URL;
-  private static readonly EXECUTE_ENDPOINT = import.meta.env.VITE_EXECUTOR_EXECUTE_ENDPOINT;
-  private static readonly STATUS_ENDPOINT = import.meta.env.VITE_EXECUTOR_STATUS_ENDPOINT;
-  private static readonly GENERATED_PROJECT_ENDPOINT = import.meta.env.VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT;
-
-  /**
-   * Valida que las variables de entorno estén configuradas
-   */
-  private static validateConfig(): void {
-    const requiredVars = [
-      'VITE_EXECUTOR_BASE_URL',
-      'VITE_EXECUTOR_EXECUTE_ENDPOINT',
-      'VITE_EXECUTOR_STATUS_ENDPOINT',
-      'VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT'
-    ];
-
-    const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
-    
-    if (missingVars.length > 0) {
-      throw new Error(`Variables de entorno faltantes: ${missingVars.join(', ')}`);
-    }
+// Mock de AuthService
+vi.mock('../AuthService', () => ({
+  default: {
+    getValidToken: vi.fn()
   }
+}));
 
-  /**
-   * Ejecuta un script para generar un componente
-   */
-  static async executeScript(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      this.validateConfig();
+// Mock de fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock de atob y btoa
+global.atob = vi.fn();
+global.btoa = vi.fn();
+
+// Mock de window.URL
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL
+  }
+});
+
+// Mock de document.createElement
+const mockLink = {
+  href: '',
+  download: '',
+  click: vi.fn()
+};
+const mockCreateElement = vi.fn(() => mockLink);
+Object.defineProperty(document, 'createElement', {
+  value: mockCreateElement
+});
+
+// Mock de document.body
+const mockBody = {
+  appendChild: vi.fn(),
+  removeChild: vi.fn()
+};
+Object.defineProperty(document, 'body', {
+  value: mockBody
+});
+
+describe('ExecutorService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('searchApps', () => {
+    it('debería retornar todas las aplicaciones cuando no hay query', async () => {
+      const result = await ExecutorService.searchApps('');
+
+      expect(result).toEqual([
+        'chl-dss-fraudlocal',
+        'chl-dss-fraudprod',
+        'chl-dss-risklocal',
+        'chl-dss-riskprod',
+        'chl-dss-compliance',
+        'chl-dss-monitoring',
+        'chl-dss-analytics',
+        'chl-dss-reporting'
+      ]);
+    });
+
+    it('debería filtrar aplicaciones por query', async () => {
+      const result = await ExecutorService.searchApps('fraud');
+
+      expect(result).toEqual([
+        'chl-dss-fraudlocal',
+        'chl-dss-fraudprod'
+      ]);
+    });
+
+    it('debería ser case insensitive', async () => {
+      const result = await ExecutorService.searchApps('FRAUD');
+
+      expect(result).toEqual([
+        'chl-dss-fraudlocal',
+        'chl-dss-fraudprod'
+      ]);
+    });
+
+    it('debería retornar array vacío para query sin coincidencias', async () => {
+      const result = await ExecutorService.searchApps('nonexistent');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('executeScript', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        throw new Error('No hay token de autenticación disponible');
-      }
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      const url = `${this.BASE_URL}${this.EXECUTE_ENDPOINT}?app-name=${encodeURIComponent(appName)}`;
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+  });
+
+  describe('getAppStatus', () => {
+    it('debería retornar null para aplicaciones no encontradas', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      console.log('Ejecutando script para:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText}`);
-      }
+      const result = await ExecutorService.getAppStatus('non-existent-app');
 
-      const result = await response.json();
-      console.log('Script ejecutado exitosamente:', result);
+      expect(result).toBeNull();
+    });
+
+    it('debería incluir logs en la respuesta del status', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      return {
-        success: true,
-        message: `Componente ${appName} iniciado correctamente`
+      const mockStatusWithLogs = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING',
+        logs: [
+          {
+            timestamp: '2024-01-01T00:00:00Z',
+            level: 'INFO',
+            message: 'Aplicación iniciada'
+          },
+          {
+            timestamp: '2024-01-01T00:01:00Z',
+            level: 'INFO',
+            message: 'Procesando componente'
+          }
+        ]
       };
-    } catch (error) {
-      console.error('Error ejecutando script:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
-    }
-  }
 
-  /**
-   * Obtiene el estado de una aplicación
-   */
-  static async getAppStatus(appName: string): Promise<AppStatus | null> {
-    try {
-      this.validateConfig();
-      
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        throw new Error('No hay token de autenticación disponible');
-      }
-
-      const url = `${this.BASE_URL}${this.STATUS_ENDPOINT}/${encodeURIComponent(appName)}`;
-      
-      console.log('Obteniendo estado de la app:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatusWithLogs
       });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // App no encontrada
-        }
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+      const result = await ExecutorService.getAppStatus('test-app');
 
-      const status: AppStatus = await response.json();
-      return status;
-    } catch (error) {
-      console.error('Error obteniendo estado de la app:', error);
-      return null;
-    }
-  }
+      expect(result).toEqual(mockStatusWithLogs);
+      expect(result?.logs).toHaveLength(2);
+      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    });
+  });
 
 
-  /**
-   * Descarga el proyecto generado como ZIP
-   */
-  static async downloadGeneratedProject(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      this.validateConfig();
+  describe('downloadGeneratedProject', () => {
+    it('debería manejar errores en la descarga', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        throw new Error('No hay token de autenticación disponible');
-      }
-
-      const url = `${this.BASE_URL}${this.GENERATED_PROJECT_ENDPOINT}?app=${encodeURIComponent(appName)}`;
-      
-      console.log('Descargando proyecto generado para:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}) // Sin base64
       });
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
 
-      const result = await response.json();
-      
-      // Asumimos que la respuesta contiene el base64 del ZIP
-      if (result.base64 || result.data) {
-        const base64Data = result.base64 || result.data;
-        const fileName = `${appName}-generated-project.zip`;
-        
-        // Convertir base64 a blob y descargar
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/zip' });
-        
-        // Crear enlace de descarga
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        return {
-          success: true,
-          message: `Proyecto ${appName} descargado exitosamente`
-        };
-      } else {
-        throw new Error('No se encontró el contenido del proyecto en la respuesta');
-      }
-    } catch (error) {
-      console.error('Error descargando proyecto:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
-    }
-  }
-
-  /**
-   * Busca aplicaciones disponibles (simulado - en un caso real vendría de una API)
-   */
-  static async searchApps(query: string): Promise<string[]> {
-    // Simulamos una búsqueda de aplicaciones disponibles
-    // En un caso real, esto vendría de una API que liste las apps disponibles
-    const availableApps = [
-      'chl-dss-fraudlocal',
-      'chl-dss-fraudprod',
-      'chl-dss-risklocal',
-      'chl-dss-riskprod',
-      'chl-dss-compliance',
-      'chl-dss-monitoring',
-      'chl-dss-analytics',
-      'chl-dss-reporting'
-    ];
-
-    if (!query.trim()) {
-      return availableApps;
-    }
-
-    return availableApps.filter(app => 
-      app.toLowerCase().includes(query.toLowerCase())
-    );
-  }
-}
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+    });
+  });
+});
