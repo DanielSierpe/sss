@@ -1,241 +1,184 @@
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-}
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-class AuthService {
-  private readonly REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI;
-  private readonly CLIENT_ID = import.meta.env.VITE_CLIENT_ID;
-
-  constructor() {
-    console.log('AuthService constructor - Variables de entorno:');
-    console.log('VITE_REDIRECT_URI:', import.meta.env.VITE_REDIRECT_URI);
-    console.log('VITE_CLIENT_ID:', import.meta.env.VITE_CLIENT_ID);
+// Mock de AuthService
+vi.mock('../AuthService', () => ({
+  default: {
+    getValidToken: vi.fn()
   }
+}));
 
-  /**
-   * Obtiene el token JWT usando el código de autorización
-   * Usa el proxy configurado en Vite para evitar problemas de CORS y certificados
-   */
-  async getJWTToken(code: string): Promise<TokenResponse> {
-    console.log('Obteniendo token JWT con código:', code);
-    
-    if (!this.REDIRECT_URI) {
-      throw new Error('Configuración de OAuth incompleta. Verifique VITE_REDIRECT_URI.');
-    }
+// Mock de import.meta.env usando vi.stubEnv
+vi.stubEnv('VITE_EXECUTOR_BASE_URL', 'http://platform.dcloud.cl.bsch/executor/v1');
+vi.stubEnv('VITE_EXECUTOR_EXECUTE_ENDPOINT', '/execute');
+vi.stubEnv('VITE_EXECUTOR_STATUS_ENDPOINT', '/status');
+vi.stubEnv('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', '/generated-project');
 
-  
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: this.REDIRECT_URI
+import { ExecutorService } from '../ExecutorService';
+
+// Mock de fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock de atob y btoa
+global.atob = vi.fn();
+global.btoa = vi.fn();
+
+// Mock de window.URL
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL
+  }
+});
+
+// Mock de document.createElement
+const mockLink = {
+  href: '',
+  download: '',
+  click: vi.fn()
+};
+const mockCreateElement = vi.fn(() => mockLink);
+Object.defineProperty(document, 'createElement', {
+  value: mockCreateElement
+});
+
+// Mock de document.body
+const mockBody = {
+  appendChild: vi.fn(),
+  removeChild: vi.fn()
+};
+Object.defineProperty(document, 'body', {
+  value: mockBody
+});
+
+describe('ExecutorService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('searchApps', () => {
+    it('debería retornar todas las aplicaciones cuando no hay query', async () => {
+      const result = await ExecutorService.searchApps('');
+
+      expect(result).toEqual(['chl-dss-fraudlocal']);
     });
 
-    try {
-      const endpoint = import.meta.env.VITE_JWT_ENDPOINT;
-      console.log('Endpoint OAuth:', endpoint);
-      console.log('Parámetros:', params.toString());
+    it('debería filtrar aplicaciones por query', async () => {
+      const result = await ExecutorService.searchApps('fraud');
+
+      expect(result).toEqual(['chl-dss-fraudlocal']);
+    });
+
+    it('debería ser case insensitive', async () => {
+      const result = await ExecutorService.searchApps('FRAUD');
+
+      expect(result).toEqual(['chl-dss-fraudlocal']);
+    });
+
+    it('debería retornar array vacío para query sin coincidencias', async () => {
+      const result = await ExecutorService.searchApps('nonexistent');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('executeScript', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'true-client-ip': '0.0.0.0',
-          'oauth_type': 'iam',
-          'Authorization': 'Basic ' + btoa('webtools:webtools')
-        },
-        body: params.toString(),
-        mode: 'cors',
-        credentials: 'include'
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+  });
+
+  describe('getAppStatus', () => {
+    it('debería retornar null para aplicaciones no encontradas', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404
       });
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
+      const result = await ExecutorService.getAppStatus('non-existent-app');
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error en la respuesta:', errorText);
-        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
-      }
-
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token obtenido exitosamente');
-      console.log('Estructura del token recibido:', JSON.stringify(tokenData, null, 2));
-      
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al obtener el token JWT:', error);
-      throw error;
-    }
-  }
-
-  async refreshToken(): Promise<TokenResponse | null> {
-    if (!this.CLIENT_ID) {
-      console.warn('No hay client_id configurado');
-      return null;
-    }
-
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      console.warn('No hay refresh token disponible');
-      return null;
-    }
-
-    const bodyParams = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: this.CLIENT_ID,
-      refresh_token: refreshToken
+      expect(result).toBeNull();
     });
 
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'true-client-ip': '0.0.0.0',
-        'oauth_type': 'iam',
-        'Authorization': 'Basic ' + btoa('webtools:webtools')
+    it('debería incluir logs en la respuesta del status', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockStatusWithLogs = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING',
+        logs: [
+          {
+            timestamp: '2024-01-01T00:00:00Z',
+            level: 'INFO',
+            message: 'Aplicación iniciada'
+          },
+          {
+            timestamp: '2024-01-01T00:01:00Z',
+            level: 'INFO',
+            message: 'Procesando componente'
+          }
+        ]
       };
 
-      const endpoint = import.meta.env.VITE_REFRESH_ENDPOINT;
-      console.log('Endpoint refresh:', endpoint);
-      console.log('Parámetros refresh:', bodyParams.toString());
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: bodyParams.toString(),
-        mode: 'cors',
-        credentials: 'include'
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatusWithLogs
       });
 
-      console.log('Respuesta del servidor (refresh):', response.status, response.statusText);
+      const result = await ExecutorService.getAppStatus('test-app');
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error al renovar token:', errorText);
-        this.clearTokens();
-        return null;
-      }
+      expect(result).toEqual(mockStatusWithLogs);
+      expect(result?.logs).toHaveLength(2);
+      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    });
+  });
 
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token renovado exitosamente');
+
+  describe('downloadGeneratedProject', () => {
+    it('debería manejar errores en la descarga', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al renovar el token:', error);
-      this.clearTokens();
-      return null;
-    }
-  }
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}) // Sin base64
+      });
 
-  private saveToken(tokenData: TokenResponse): void {
-    // Validar que los campos requeridos existan
-    if (!tokenData.access_token) {
-      console.error('Token no contiene access_token');
-      return;
-    }
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
 
-    // Usar 'Bearer' como token_type por defecto si no viene en la respuesta
-    const tokenType = tokenData.token_type || 'Bearer';
-    console.log('Token type:', tokenType);
-
-    localStorage.setItem('access_token', tokenData.access_token);
-    localStorage.setItem('token_type', tokenType);
-    
-    
-    if (tokenData.expires_in !== undefined && tokenData.expires_in !== null) {
-      localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
-      
-     
-      const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Fecha de expiración calculada:', new Date(expiresAt).toISOString());
-    } else {
-      console.warn('Token no contiene expires_in, no se puede calcular expiración');
-   
-      const defaultExpiresIn = 3600; 
-      localStorage.setItem('token_expires_in', defaultExpiresIn.toString());
-      const expiresAt = new Date().getTime() + (defaultExpiresIn * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Usando expiración por defecto (1 hora)');
-    }
-    
-
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token);
-      console.log('Refresh token guardado');
-    } else {
-      console.log('No hay refresh token disponible');
-    }
-    
-    console.log('Token guardado en localStorage exitosamente');
-  }
-
-  getStoredToken(): string | null {
-    return localStorage.getItem('access_token');
-  }
-
-  isTokenExpired(): boolean {
-    const expiresAt = localStorage.getItem('token_expires_at');
-    if (!expiresAt) return true;
-    
-    const isExpired = new Date().getTime() > parseInt(expiresAt);
-    if (isExpired) {
-      console.log('Token expirado');
-    }
-    return isExpired;
-  }
-
-  getAuthHeader(): string | null {
-    const token = this.getStoredToken();
-    const tokenType = localStorage.getItem('token_type') || 'Bearer';
-    
-    if (!token || this.isTokenExpired()) {
-      return null;
-    }
-    
-    return `${tokenType} ${token}`;
-  }
-
-  async getValidToken(): Promise<string | null> {
-    const currentToken = this.getStoredToken();
-    
-    // Si no hay token guardado, no se puede hacer nada
-    if (!currentToken) {
-      console.warn('No hay token de acceso guardado');
-      return null;
-    }
-
-    // Si el token no está expirado, devolverlo
-    if (!this.isTokenExpired()) {
-      return currentToken;
-    }
-
-    console.log('Token expirado, intentando renovar...');
-    const refreshedToken = await this.refreshToken();
-    return refreshedToken ? refreshedToken.access_token : null;
-  }
-
-  clearTokens(): void {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token_type');
-    localStorage.removeItem('token_expires_in');
-    localStorage.removeItem('token_expires_at');
-    localStorage.removeItem('refresh_token');
-    console.log('Tokens limpiados del localStorage');
-  }
-
-  isAuthenticated(): boolean {
-    const token = this.getStoredToken();
-    const authenticated = token !== null && !this.isTokenExpired();
-    console.log('Usuario autenticado:', authenticated);
-    return authenticated;
-  }
-
-}
-
-export default new AuthService();
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+    });
+  });
+});
