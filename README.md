@@ -1,5 +1,2 @@
-# URL base del executor (usando proxy de Vite)
-VITE_EXECUTOR_BASE_URL=/executor/v1
 
-
-vi.stubEnv('VITE_EXECUTOR_BASE_URL', '/executor/v1');
+http://platform.dcloud.cl.bsch/executor/v1/execute?app-name=chl-dss-fraudlocal
