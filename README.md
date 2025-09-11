@@ -1,20 +1,81 @@
-let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+# URL base del executor
+VITE_EXECUTOR_BASE_URL=http://platform.dcloud.cl.bsch/executor/v1
 
-      // Si el servidor devuelve 405 (p. ej. por diferencia con la barra final), reintentar
-      if (response.status === 405) {
-        const urlWithSlash = url.endsWith('/') ? url : `${url}/`;
-        console.warn('Recibido 405. Reintentando con barra final:', urlWithSlash);
-        response = await fetch(urlWithSlash, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-      }
+
+
+/// <reference types="vitest" />
+import federation from '@originjs/vite-plugin-federation';
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vitest/config';
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [
+    react(),
+    federation({
+      name: 'app',
+      remotes: {
+        remoteApp: '/remoteApp/assets/remoteEntry.js',
+      },
+      shared: ['react', 'react-dom'],
+    }),
+  ],
+  build: {
+    target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
+  server: {
+    proxy: {
+      '/remoteApp': {
+        target: `http://localhost:4174`,
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/remoteApp/, ''),
+        secure: false,
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      '/remoteApp': {
+        target: `http://localhost:4174`,
+        changeOrigin: true,
+         rewrite: (path) => path.replace(/^\/remoteApp/, ''),
+        secure: false,
+      },
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      reporter: ['clover', 'lcov', 'text', 'json', 'html'],
+      all: true,
+      include: ['src'],
+      exclude: [
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/__mocks__/**/*',
+        'src/__fixtures__/**/*',
+        'src/**/index.ts',
+        'src/App.tsx',
+        'src/global.d.ts',
+        'src/test/setup.ts',
+        'src/setupTests.ts',
+      ],
+      thresholds: {
+        statements: 0,
+        branches: 0,
+        functions: 0,
+        lines: 0,
+      },
+    },
+    restoreMocks: true,
+  }
+})
