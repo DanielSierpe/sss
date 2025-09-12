@@ -1,260 +1,492 @@
- FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería mostrar logs cuando están disponibles en el status
-TestingLibraryElementError: Unable to find an element with the text: Ver Logs. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Generador from '../Generador';
+import { useAuthContext } from '../../contexts/AuthContext';
+import { ExecutorService } from '../../services/ExecutorService';
+import type { AppStatus } from '../../services/ExecutorService';
 
-Ignored nodes: comments, script, style
-<body>
-  <div>
-    <div
-      class="generador-content"
-    >
-      <div
-        class="generador-inner"
-      >
-        <h2>
-          Validación de Estructura
-        </h2>
-        <div
-          class="auth-info"
-          style="background: rgb(248, 249, 250); padding: 16px; border-radius: 8px; margin-bottom: 24px; border: 1px solid rgb(233, 236, 239);"
-        >
-          <h3
-            style="margin: 0px 0px 12px 0px; color: rgb(73, 80, 87);"
-          >
-            Estado de Autenticación
-          </h3>
-          <div
-            style="display: flex; flex-direction: column; gap: 8px;"
-          >
-            <div>
-              <strong>
-                Autenticado:
-              </strong>
+// Mock del contexto de autenticación
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuthContext: vi.fn()
+}));
 
-              Sí
-            </div>
-            <div>
-              <strong>
-                Cargando:
-              </strong>
+// Mock del ExecutorService
+vi.mock('../../services/ExecutorService', () => ({
+  ExecutorService: {
+    searchApps: vi.fn(),
+    executeScript: vi.fn(),
+    getAppStatus: vi.fn(),
+    downloadGeneratedProject: vi.fn()
+  }
+}));
 
-              No
-            </div>
-            <div>
-              <strong>
-                Token:
-              </strong>
+// Mock de timers
+vi.useFakeTimers();
 
-              mock-jwt-token...
-            </div>
-          </div>
-        </div>
-        <form
-          autocomplete="off"
-          class="generador-form"
-        >
-          <div
-            class="form-group search-container"
-          >
-            <label
-              for="openapi-name"
-            >
-              Nombre openAPI
-            </label>
-            <div
-              class="search-wrapper"
-            >
-              <input
-                autocomplete="off"
-                class="search-input"
-                id="openapi-name"
-                name="openapi-name"
-                placeholder="Buscar aplicación..."
-                type="text"
-                value="app1"
-              />
-            </div>
-            <div
-              class="selected-app"
-            >
-              <span
-                class="selected-label"
-              >
-                Aplicación seleccionada:
-              </span>
-              <span
-                class="selected-value"
-              >
-                app1
-              </span>
-            </div>
-          </div>
-          <div
-            class="button-group"
-          >
-            <button
-              class="btn validar"
-              type="button"
-            >
-              Validar
-            </button>
-            <button
-              class="btn generar enabled"
-              type="button"
-            >
-              Generar componente
-            </button>
-          </div>
-        </form>
-        <div
-          class="tabla-container"
-        >
-          <table
-            class="tabla-generador"
-          >
-            <thead>
-              <tr>
-                <th>
-                  Code
-                </th>
-                <th>
-                  path
-                </th>
-                <th>
-                  Message
-                </th>
-                <th>
-                  Severity
-                </th>
-                <th>
-                  range
-                </th>
-              </tr>
-            </thead>
-            <tbody />
-          </table>
-        </div>
-      </div>
-      <div
-        class="modal-overlay"
-      >
-        <div
-          class="log-modal"
-        >
-          <div
-            class="modal-header"
-          >
-            <h3>
-              Generación de Componente:
-              app1
-            </h3>
-            <div
-              class="header-actions"
-            >
-              <button
-                class="close-button"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-          <div
-            class="modal-content"
-          >
-            <div
-              class="execution-status"
-            >
-              <div
-                class="status-message"
-              >
-                Componente en ejecución...
-              </div>
-              <div
-                class="app-status"
-              >
-                <div
-                  class="status-item"
-                >
-                  <span
-                    class="status-label"
-                  >
-                    Estado:
-                  </span>
-                  <span
-                    class="status-value status-running"
-                  >
-                    running
-                  </span>
-                </div>
-                <div
-                  class="status-item"
-                >
-                  <span
-                    class="status-label"
-                  >
-                    Versión:
-                  </span>
-                  <span
-                    class="status-value"
-                  >
-                    1.0.0
-                  </span>
-                </div>
-                <div
-                  class="status-item"
-                >
-                  <span
-                    class="status-label"
-                  >
-                    Inicio:
-                  </span>
-                  <span
-                    class="status-value"
-                  >
-                    31/12/2023, 21:00:00
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div
-              class="loading-indicator"
-            >
-              <div
-                class="spinner"
-              />
-              <span>
-                Monitoreando estado...
-              </span>
-            </div>
-          </div>
-          <div
-            class="modal-footer"
-          >
-            <button
-              class="btn btn-secondary"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</body>
- ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
- ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
- ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
- ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
- ❯ src/pages/__tests__/Generador.test.tsx:260:37
-    258|     });
-    259|
-    260|     const toggleLogsButton = screen.getByText('Ver Logs');
-       |                                     ^
-    261|
-    262|     await act(async () => {
+describe('Generador', () => {
+  const mockUseAuthContext = vi.mocked(useAuthContext);
+  const mockExecutorService = vi.mocked(ExecutorService);
 
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+  const mockApps = ['app1', 'app2', 'app3', 'test-app'];
+  const mockToken = 'mock-jwt-token';
 
- Test Files  1 failed | 13 passed (14)
-      Tests  1 failed | 294 passed (295)
-   Start at  16:11:51
-   Duration  29.94s (transform 2.48s, setup 7.02s, collect 8.23s, tests 9.74s, environment 44.61s, prepare 5.58s)
+  const mockAppStatus: AppStatus = {
+    app: 'test-app',
+    startTime: '2024-01-01T00:00:00Z',
+    version: '1.0.0',
+    status: 'running',
+    logs: [
+      {
+        timestamp: '2024-01-01T00:00:00Z',
+        level: 'INFO',
+        message: 'Aplicación iniciada'
+      },
+      {
+        timestamp: '2024-01-01T00:01:00Z',
+        level: 'INFO',
+        message: 'Procesando componente'
+      }
+    ]
+  };
+
+  beforeEach(() => {
+    // Configurar mock del contexto de autenticación
+    mockUseAuthContext.mockReturnValue({
+      isAuthenticated: true,
+      token: mockToken,
+      isLoading: false,
+      error: null,
+      handleAuthCode: vi.fn(),
+      logout: vi.fn()
+    });
+
+    // Configurar mocks del ExecutorService
+    mockExecutorService.searchApps.mockResolvedValue(mockApps);
+    mockExecutorService.executeScript.mockResolvedValue({ success: true, message: 'Script ejecutado' });
+    mockExecutorService.getAppStatus.mockResolvedValue(mockAppStatus);
+    mockExecutorService.downloadGeneratedProject.mockResolvedValue({ success: true, message: 'Proyecto test-app descargado exitosamente como test-app-generated-project.tar.gz' });
+
+    // Limpiar timers
+    vi.clearAllTimers();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.runOnlyPendingTimers();
+  });
+
+  it('debería renderizar correctamente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    expect(screen.getByText('Validación de Estructura')).toBeInTheDocument();
+    expect(screen.getByText('Estado de Autenticación')).toBeInTheDocument();
+    expect(screen.getByText('Sí')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Buscar aplicación...')).toBeInTheDocument();
+    expect(screen.getByText('Validar')).toBeInTheDocument();
+    expect(screen.getByText('Generar componente')).toBeInTheDocument();
+  });
+
+  it('debería cargar aplicaciones al montar el componente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    expect(mockExecutorService.searchApps).toHaveBeenCalledWith('');
+  });
+
+  it('debería filtrar aplicaciones al escribir en el campo de búsqueda', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: 'app1' } });
+    });
+
+    expect(screen.getByText('app1')).toBeInTheDocument();
+    expect(screen.queryByText('app2')).not.toBeInTheDocument();
+  });
+
+  it('debería mostrar dropdown al hacer focus en el campo de búsqueda', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    expect(screen.getByText('app1')).toBeInTheDocument();
+    expect(screen.getByText('app2')).toBeInTheDocument();
+  });
+
+  it('debería seleccionar una aplicación al hacer clic en el dropdown', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    expect(screen.getByText('Aplicación seleccionada:')).toBeInTheDocument();
+    expect(screen.getByText('app1')).toBeInTheDocument();
+  });
+
+  it('debería habilitar el botón generar cuando se selecciona una aplicación', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    const generateButton = screen.getByText('Generar componente');
+    
+
+    expect(generateButton).toBeDisabled();
+
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+
+    expect(generateButton).not.toBeDisabled();
+  });
+
+  it('debería ejecutar el script y mostrar el modal al hacer clic en generar', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    expect(mockExecutorService.executeScript).toHaveBeenCalledWith('app1');
+    expect(screen.getByText('Generación de Componente: app1')).toBeInTheDocument();
+    expect(screen.getByText('Componente iniciado correctamente. Monitoreando estado...')).toBeInTheDocument();
+  });
+
+  it('debería iniciar el polling después de ejecutar el script exitosamente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(mockExecutorService.getAppStatus).toHaveBeenCalledWith('app1');
+  });
+
+
+  it('debería mostrar el botón de descarga cuando el estado es completed', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'completed'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('Descargar Proyecto')).toBeInTheDocument();
+  });
+
+  it('debería descargar el proyecto cuando se hace clic en el botón de descarga', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'completed'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+  
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const downloadButton = screen.getByText('Descargar Proyecto');
+    
+    await act(async () => {
+      fireEvent.click(downloadButton);
+    });
+
+    expect(mockExecutorService.downloadGeneratedProject).toHaveBeenCalledWith('app1');
+  });
+
+  it('debería cerrar el modal y detener el polling al hacer clic en cerrar', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    const closeButton = screen.getByText('Cerrar');
+    
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    expect(screen.queryByText('Generación de Componente: app1')).not.toBeInTheDocument();
+  });
+
+  it('debería manejar errores en la ejecución del script', async () => {
+    mockExecutorService.executeScript.mockRejectedValue(new Error('Error de ejecución'));
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    expect(screen.getByText('Error: Error de ejecución')).toBeInTheDocument();
+  });
+
+  it('debería manejar errores en la descarga del proyecto', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'completed'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+    mockExecutorService.downloadGeneratedProject.mockRejectedValue(new Error('Error de descarga'));
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+ 
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const downloadButton = screen.getByText('Descargar Proyecto');
+    
+    await act(async () => {
+      fireEvent.click(downloadButton);
+    });
+
+    expect(screen.getByText('Error en descarga: Error de descarga')).toBeInTheDocument();
+  });
+
+  it('debería mostrar el estado correcto según el status de la aplicación', async () => {
+    const errorStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'error'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(errorStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('Error en la generación del componente')).toBeInTheDocument();
+  });
+
+  it('debería limpiar el polling al desmontar el componente', async () => {
+    const { unmount } = await act(async () => {
+      return render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    unmount();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+
+    expect(mockExecutorService.getAppStatus).toHaveBeenCalledTimes(0);
+  });
+});
