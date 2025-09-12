@@ -1,252 +1,529 @@
-import AuthService from './AuthService';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Generador from '../Generador';
+import { useAuthContext } from '../../contexts/AuthContext';
+import { ExecutorService } from '../../services/ExecutorService';
+import type { AppStatus } from '../../services/ExecutorService';
 
-export interface AppStatus {
-  app: string;
-  startTime: string;
-  version: string;
-  status: 'starting' | 'running' | 'completed' | 'stopped' | 'error';
-  logs?: ExecutionLog[];
-}
+// Mock del contexto de autenticación
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuthContext: vi.fn()
+}));
 
-export interface ExecutionLog {
-  timestamp: string;
-  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
-  message: string;
-}
+// Mock del ExecutorService
+vi.mock('../../services/ExecutorService', () => ({
+  ExecutorService: {
+    searchApps: vi.fn(),
+    executeScript: vi.fn(),
+    getAppStatus: vi.fn(),
+    downloadGeneratedProject: vi.fn()
+  }
+}));
 
-export class ExecutorService {
-  private static readonly BASE_URL = import.meta.env.VITE_EXECUTOR_BASE_URL;
-  private static readonly EXECUTE_ENDPOINT = import.meta.env.VITE_EXECUTOR_EXECUTE_ENDPOINT;
-  private static readonly STATUS_ENDPOINT = import.meta.env.VITE_EXECUTOR_STATUS_ENDPOINT;
-  private static readonly GENERATED_PROJECT_ENDPOINT = import.meta.env.VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT;
+// Mock de timers
+vi.useFakeTimers();
 
-  /**
-   * Valida que las variables de entorno estén configuradas
-   */
-  private static validateConfig(): void {
-    const requiredVars = [
-      'VITE_EXECUTOR_BASE_URL',
-      'VITE_EXECUTOR_EXECUTE_ENDPOINT',
-      'VITE_EXECUTOR_STATUS_ENDPOINT',
-      'VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT'
-    ];
+describe('Generador', () => {
+  const mockUseAuthContext = vi.mocked(useAuthContext);
+  const mockExecutorService = vi.mocked(ExecutorService);
 
-    const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
+  const mockApps = ['app1', 'app2', 'app3', 'test-app'];
+  const mockToken = 'mock-jwt-token';
+
+  const mockAppStatus: AppStatus = {
+    app: 'test-app',
+    startTime: '2024-01-01T00:00:00Z',
+    version: '1.0.0',
+    status: 'running',
+    logs: [
+      {
+        timestamp: '2024-01-01T00:00:00Z',
+        level: 'INFO',
+        message: 'Aplicación iniciada'
+      },
+      {
+        timestamp: '2024-01-01T00:01:00Z',
+        level: 'INFO',
+        message: 'Procesando componente'
+      }
+    ]
+  };
+
+  beforeEach(() => {
+    // Configurar mock del contexto de autenticación
+    mockUseAuthContext.mockReturnValue({
+      isAuthenticated: true,
+      token: mockToken,
+      isLoading: false,
+      error: null,
+      handleAuthCode: vi.fn(),
+      logout: vi.fn()
+    });
+
+    // Configurar mocks del ExecutorService
+    mockExecutorService.searchApps.mockResolvedValue(mockApps);
+    mockExecutorService.executeScript.mockResolvedValue({ success: true, message: 'Script ejecutado' });
+    mockExecutorService.getAppStatus.mockResolvedValue(mockAppStatus);
+    mockExecutorService.downloadGeneratedProject.mockResolvedValue({ success: true, message: 'Proyecto test-app descargado exitosamente como test-app-generated-project.tar.gz' });
+
+    // Limpiar timers
+    vi.clearAllTimers();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.runOnlyPendingTimers();
+  });
+
+  it('debería renderizar correctamente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    expect(screen.getByText('Validación de Estructura')).toBeInTheDocument();
+    expect(screen.getByText('Estado de Autenticación')).toBeInTheDocument();
+    expect(screen.getByText('Sí')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Buscar aplicación...')).toBeInTheDocument();
+    expect(screen.getByText('Validar')).toBeInTheDocument();
+    expect(screen.getByText('Generar componente')).toBeInTheDocument();
+  });
+
+  it('debería cargar aplicaciones al montar el componente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    expect(mockExecutorService.searchApps).toHaveBeenCalledWith('');
+  });
+
+  it('debería filtrar aplicaciones al escribir en el campo de búsqueda', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
     
-    if (missingVars.length > 0) {
-      throw new Error(`Variables de entorno faltantes: ${missingVars.join(', ')}`);
-    }
-  }
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: 'app1' } });
+    });
 
-  /**
-   * Ejecuta un script para generar un componente
-   */
-  static async executeScript(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return { success: false, message: 'No hay token de autenticación disponible' };
-      }
+    expect(screen.getByText('app1')).toBeInTheDocument();
+    expect(screen.queryByText('app2')).not.toBeInTheDocument();
+  });
 
-      this.validateConfig();
+  it('debería mostrar dropdown al hacer focus en el campo de búsqueda', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-      const url = `${this.BASE_URL}${this.EXECUTE_ENDPOINT}?app-name=${encodeURIComponent(appName)}`;
-      
-      console.log('Ejecutando script para:', appName);
-      console.log('URL:', url);
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    expect(screen.getByText('app1')).toBeInTheDocument();
+    expect(screen.getByText('app2')).toBeInTheDocument();
+  });
 
-      // Si el servidor devuelve 405 (p. ej. por diferencia con la barra final), reintentar
-      if (response.status === 405) {
-        const urlWithSlash = url.endsWith('/') ? url : `${url}/`;
-        console.warn('Recibido 405. Reintentando con barra final:', urlWithSlash);
-        response = await fetch(urlWithSlash, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-      }
+  it('debería seleccionar una aplicación al hacer clic en el dropdown', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText}`);
-      }
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-      const result = await response.json();
-      console.log('Script ejecutado exitosamente:', result);
-      
-      return {
-        success: true,
-        message: `Componente ${appName} iniciado correctamente`
-      };
-    } catch (error) {
-      console.error('Error ejecutando script:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
-    }
-  }
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
 
-  /**
-   * Obtiene el estado de una aplicación
-   */
-  static async getAppStatus(appName: string): Promise<AppStatus | null> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return null;
-      }
+    expect(screen.getByText('Aplicación seleccionada:')).toBeInTheDocument();
+    expect(screen.getByText('app1')).toBeInTheDocument();
+  });
 
-      this.validateConfig();
+  it('debería habilitar el botón generar cuando se selecciona una aplicación', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-      const url = `${this.BASE_URL}${this.STATUS_ENDPOINT}/${encodeURIComponent(appName)}`;
-      
-      console.log('Obteniendo estado de la app:', appName);
-      console.log('URL:', url);
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    const generateButton = screen.getByText('Generar componente');
+    
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    expect(generateButton).toBeDisabled();
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // App no encontrada
-        }
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-      const status: AppStatus = await response.json();
-      return status;
-    } catch (error) {
-      console.error('Error obteniendo estado de la app:', error);
-      return null;
-    }
-  }
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
 
 
-  /**
-   * Descarga el proyecto generado como TAR.GZ
-   */
-  static async downloadGeneratedProject(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return { success: false, message: 'No hay token de autenticación disponible' };
-      }
+    expect(generateButton).not.toBeDisabled();
+  });
 
-      this.validateConfig();
+  it('debería ejecutar el script y mostrar el modal al hacer clic en generar', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-      const url = `${this.BASE_URL}${this.GENERATED_PROJECT_ENDPOINT}?app=${encodeURIComponent(appName)}`;
-      
-      console.log('Descargando proyecto generado para:', appName);
-      console.log('URL:', url);
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
 
-      const result = await response.json();
-      console.log('Respuesta del servidor:', result);
-      
-      // Buscar el base64 en diferentes campos posibles
-      const base64Data = result.base64 || result.data || result.content || result.file;
-      
-      if (!base64Data) {
-        console.error('No se encontró base64 en la respuesta:', result);
-        throw new Error('No se encontró el contenido del proyecto en la respuesta');
-      }
+    expect(mockExecutorService.executeScript).toHaveBeenCalledWith('app1');
+    expect(screen.getByText('Generación de Componente: app1')).toBeInTheDocument();
+    expect(screen.getByText('Componente iniciado correctamente. Monitoreando estado...')).toBeInTheDocument();
+  });
 
-      // Validar que el base64 no esté vacío
-      if (typeof base64Data !== 'string' || base64Data.trim() === '') {
-        throw new Error('El contenido base64 está vacío o es inválido');
-      }
+  it('debería iniciar el polling después de ejecutar el script exitosamente', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
 
-      const fileName = `${appName}-generated-project.tar.gz`;
-      
-      try {
-        // Convertir base64 a bytes de manera más robusta
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        // Crear blob como TAR.GZ
-        const blob = new Blob([bytes], { type: 'application/gzip' });
-        
-        console.log('Blob creado:', {
-          size: blob.size,
-          type: blob.type
-        });
-        
-        // Crear enlace de descarga
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = fileName;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Limpiar URL después de un breve delay
-        setTimeout(() => {
-          window.URL.revokeObjectURL(downloadUrl);
-        }, 100);
-        
-        return {
-          success: true,
-          message: `Proyecto ${appName} descargado exitosamente como ${fileName}`
-        };
-        
-      } catch (base64Error) {
-        console.error('Error procesando base64:', base64Error);
-        throw new Error('Error al procesar el contenido base64 del archivo');
-      }
-      
-    } catch (error) {
-      console.error('Error descargando proyecto:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
-    }
-  }
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(mockExecutorService.getAppStatus).toHaveBeenCalledWith('app1');
+  });
+
+  it('debería mostrar logs cuando están disponibles en el status', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const toggleLogsButton = screen.getByText('Ver Logs');
+    
+    await act(async () => {
+      fireEvent.click(toggleLogsButton);
+    });
+
+    expect(screen.getByText('Logs de Ejecución')).toBeInTheDocument();
+    expect(screen.getByText('Aplicación iniciada')).toBeInTheDocument();
+    expect(screen.getByText('Procesando componente')).toBeInTheDocument();
+  });
+
+  it('debería mostrar el botón de descarga cuando el estado es completed', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'completed'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('Descargar Proyecto')).toBeInTheDocument();
+  });
+
+  it('debería descargar el proyecto cuando se hace clic en el botón de descarga', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'completed'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
 
   
-  static async searchApps(query: string): Promise<string[]> {
-    const availableApps = [
-      'chl-dss-fraudlocal'
-    ];
-    if (!query.trim()) {
-      return availableApps;
-    }
-    return availableApps.filter(app => 
-      app.toLowerCase().includes(query.toLowerCase())
-    );
-  }
-}
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const downloadButton = screen.getByText('Descargar Proyecto');
+    
+    await act(async () => {
+      fireEvent.click(downloadButton);
+    });
+
+    expect(mockExecutorService.downloadGeneratedProject).toHaveBeenCalledWith('app1');
+  });
+
+  it('debería cerrar el modal y detener el polling al hacer clic en cerrar', async () => {
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    const closeButton = screen.getByText('Cerrar');
+    
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    expect(screen.queryByText('Generación de Componente: app1')).not.toBeInTheDocument();
+  });
+
+  it('debería manejar errores en la ejecución del script', async () => {
+    mockExecutorService.executeScript.mockRejectedValue(new Error('Error de ejecución'));
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+    expect(screen.getByText('Error: Error de ejecución')).toBeInTheDocument();
+  });
+
+  it('debería manejar errores en la descarga del proyecto', async () => {
+    const completeStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'completed'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(completeStatus);
+    mockExecutorService.downloadGeneratedProject.mockRejectedValue(new Error('Error de descarga'));
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+ 
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    const downloadButton = screen.getByText('Descargar Proyecto');
+    
+    await act(async () => {
+      fireEvent.click(downloadButton);
+    });
+
+    expect(screen.getByText('Error en descarga: Error de descarga')).toBeInTheDocument();
+  });
+
+  it('debería mostrar el estado correcto según el status de la aplicación', async () => {
+    const errorStatus: AppStatus = {
+      ...mockAppStatus,
+      status: 'error'
+    };
+
+    mockExecutorService.getAppStatus.mockResolvedValue(errorStatus);
+
+    await act(async () => {
+      render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('Error en la generación del componente')).toBeInTheDocument();
+  });
+
+  it('debería limpiar el polling al desmontar el componente', async () => {
+    const { unmount } = await act(async () => {
+      return render(<Generador />);
+    });
+
+    const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+    
+    await act(async () => {
+      fireEvent.focus(searchInput);
+    });
+
+    const appOption = screen.getByText('app1');
+    
+    await act(async () => {
+      fireEvent.click(appOption);
+    });
+
+    const generateButton = screen.getByText('Generar componente');
+    
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+
+
+    unmount();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+
+    expect(mockExecutorService.getAppStatus).toHaveBeenCalledTimes(0);
+  });
+});
