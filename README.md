@@ -1,159 +1,605 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock de AuthService
-vi.mock('../AuthService', () => ({
-  default: {
-    getValidToken: vi.fn()
-  }
-}));
+ ✓ src/App.test.tsx (5) 389ms
+ ✓ src/contexts/__tests__/AuthContext.test.tsx (7)
+ ✓ src/hooks/__tests__/useAuth.test.ts (7)
+ ✓ src/pages/__tests__/DisenoOpenAPI.test.tsx (60) 1802ms
+ ✓ src/pages/__tests__/EditorJSLT.test.tsx (17) 1543ms
+ ✓ src/pages/__tests__/EditorVisual.test.tsx (34) 2483ms
+ ✓ src/pages/__tests__/EditorXSLT.test.tsx (18) 1423ms
+ ❯ src/pages/__tests__/Generador.test.tsx (14) 770ms
+   ❯ Generador (14) 768ms
+     ✓ debería renderizar correctamente
+     ✓ debería permitir escribir en el campo de búsqueda
+     ✓ debería habilitar el botón generar cuando hay texto en el campo
+     ✓ debería mostrar error cuando el componente no existe
+     ✓ debería habilitar el botón generar cuando se escribe en el campo
+     ✓ debería ejecutar el script y mostrar el modal al hacer clic en generar
+     × debería iniciar el polling después de ejecutar el script exitosamente
+     × debería mostrar el botón de descarga cuando el estado es completed
+     × debería descargar el proyecto cuando se hace clic en el botón de descarga
+     × debería cerrar el modal y detener el polling al hacer clic en cerrar 354ms
+     × debería manejar errores en la ejecución del script
+     × debería manejar errores en la descarga del proyecto
+     × debería mostrar el estado correcto según el status de la aplicación
+     × debería limpiar el polling al desmontar el componente
+ ✓ src/services/__tests__/ApiDefinitionFileService.test.ts (28)
+ ✓ src/services/__tests__/AuthService.test.ts (12)
+ ✓ src/services/__tests__/EditorService.test.ts (42)
+ ✓ src/services/__tests__/ExecutorService.test.ts (5)
+ ✓ src/services/__tests__/HttpService.test.ts (14)
+ ✓ src/services/__tests__/StorageService.test.ts (26)
 
-// Mock de import.meta.env usando vi.stubEnv
-vi.stubEnv('VITE_EXECUTOR_BASE_URL', '/executor/v1');
-vi.stubEnv('VITE_EXECUTOR_EXECUTE_ENDPOINT', '/execute');
-vi.stubEnv('VITE_EXECUTOR_STATUS_ENDPOINT', '/status');
-vi.stubEnv('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', '/generated-project');
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 
-import { ExecutorService } from '../ExecutorService';
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería iniciar el polling después de ejecutar el script exitosamente
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-// Mock de fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:189:32
+    187|     });
+    188|
+    189|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    190|
+    191|     await act(async () => {
 
-// Mock de atob y btoa
-global.atob = vi.fn();
-global.btoa = vi.fn();
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
 
-// Mock de window.URL
-const mockCreateObjectURL = vi.fn();
-const mockRevokeObjectURL = vi.fn();
-Object.defineProperty(window, 'URL', {
-  value: {
-    createObjectURL: mockCreateObjectURL,
-    revokeObjectURL: mockRevokeObjectURL
-  }
-});
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería mostrar el botón de descarga cuando el estado es completed
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-// Mock de document.createElement
-const mockLink = {
-  href: '',
-  download: '',
-  click: vi.fn()
-};
-const mockCreateElement = vi.fn(() => mockLink);
-Object.defineProperty(document, 'createElement', {
-  value: mockCreateElement
-});
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:227:32
+    225|     });
+    226|
+    227|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    228|
+    229|     await act(async () => {
 
-// Mock de document.body
-const mockBody = {
-  appendChild: vi.fn(),
-  removeChild: vi.fn()
-};
-Object.defineProperty(document, 'body', {
-  value: mockBody
-});
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
 
-describe('ExecutorService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería descargar el proyecto cuando se hace clic en el botón de descarga
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:265:32
+    263|     });
+    264|
+    265|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    266|
+    267|     await act(async () => {
 
-  describe('executeScript', () => {
-    it('debería manejar errores de autenticación', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
 
-      const result = await ExecutorService.executeScript('test-app');
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería cerrar el modal y detener el polling al hacer clic en cerrar
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No hay token de autenticación disponible');
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:302:32
+    300|     });
+    301|
+    302|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    303|
+    304|     await act(async () => {
 
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
 
-      const result = await ExecutorService.executeScript('test-app');
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería manejar errores en la ejecución del script
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Network error');
-    });
-  });
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:336:32
+    334|     });
+    335|
+    336|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    337|
+    338|     await act(async () => {
 
-  describe('getAppStatus', () => {
-    it('debería retornar null para aplicaciones no encontradas', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404
-      });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
 
-      const result = await ExecutorService.getAppStatus('non-existent-app');
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería manejar errores en la descarga del proyecto
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-      expect(result).toBeNull();
-    });
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:370:32
+    368|     });
+    369|
+    370|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    371|
+    372|     await act(async () => {
 
-    it('debería incluir logs en la respuesta del status', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockStatusWithLogs = {
-        app: 'test-app',
-        startTime: '2024-01-01T00:00:00Z',
-        version: '1.0.0',
-        status: 'RUNNING',
-        logs: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            level: 'INFO',
-            message: 'Aplicación iniciada'
-          },
-          {
-            timestamp: '2024-01-01T00:01:00Z',
-            level: 'INFO',
-            message: 'Procesando componente'
-          }
-        ]
-      };
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatusWithLogs
-      });
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería mostrar el estado correcto según el status de la aplicación
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-      const result = await ExecutorService.getAppStatus('test-app');
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:414:32
+    412|     });
+    413|
+    414|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    415|
+    416|     await act(async () => {
 
-      expect(result).toEqual(mockStatusWithLogs);
-      expect(result?.logs).toHaveLength(2);
-      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
-    });
-  });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
 
+ FAIL  src/pages/__tests__/Generador.test.tsx > Generador > debería limpiar el polling al desmontar el componente
+TestingLibraryElementError: Unable to find an element with the placeholder text of: Buscar aplicación...
 
-  describe('downloadGeneratedProject', () => {
-    it('debería manejar errores en la descarga', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}) // Sin base64
-      });
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="generador-content"
+    >
+      <div
+        class="generador-inner"
+      >
+        <h2>
+          Generación de Componentes
+        </h2>
+        <form
+          autocomplete="off"
+          class="generador-form"
+        >
+          <div
+            class="form-group search-container"
+          >
+            <label
+              for="openapi-name"
+            >
+              Nombre del componente
+            </label>
+            <div
+              class="search-wrapper"
+            >
+              <input
+                autocomplete="off"
+                class="search-input"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                type="text"
+                value=""
+              />
+            </div>
+          </div>
+          <div
+            class="button-group"
+          >
+            <button
+              class="btn generar disabled"
+              disabled=""
+              type="button"
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/pages/__tests__/Generador.test.tsx:445:32
+    443|     });
+    444|
+    445|     const searchInput = screen.getByPlaceholderText('Buscar aplicación...');
+       |                                ^
+    446|
+    447|     await act(async () => {
 
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
-    });
-  });
-});
+ Test Files  1 failed | 13 passed (14)
+      Tests  8 failed | 281 passed (289)
+   Start at  17:18:30
+   Duration  35.66s (transform 2.37s, setup 7.62s, collect 9.31s, tests 8.85s, environment 52.35s, prepare 7.90s)
