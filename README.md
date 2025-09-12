@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { AppStatus, ExecutionLog } from '../services/ExecutorService';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuthContext } from '../contexts/AuthContext';
 import { ExecutorService } from '../services/ExecutorService';
+import type { AppStatus } from '../services/ExecutorService';
 import './Generador.css';
 
 const Generador: React.FC = () => {
+  const { isAuthenticated, token, isLoading } = useAuthContext();
   
   // Estados para la búsqueda y selección
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,10 +18,8 @@ const Generador: React.FC = () => {
   // Estados para el modal de logs
   const [showLogModal, setShowLogModal] = useState(false);
   const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionMessage, setExecutionMessage] = useState('');
-  const [showLogs, setShowLogs] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   
   // Referencias
@@ -108,7 +108,6 @@ const Generador: React.FC = () => {
       setIsExecuting(true);
       setExecutionMessage('Iniciando generación del componente...');
       setShowLogModal(true);
-      setLogs([]);
 
       // Ejecutar el script
       const result = await ExecutorService.executeScript(selectedApp);
@@ -128,6 +127,7 @@ const Generador: React.FC = () => {
   };
 
   const startPolling = () => {
+    console.log('Iniciando polling...');
     const interval = setInterval(async () => {
       try {
         const status = await ExecutorService.getAppStatus(selectedApp);
@@ -135,23 +135,23 @@ const Generador: React.FC = () => {
           setAppStatus(status);
           
 
-          if (status.logs && status.logs.length > 0) {
-            setLogs(status.logs);
-          }
 
 
-          if (status.status === 'COMPLETED') {
-            console.log('Status COMPLETED detectado:', status);
+          if (status.status === 'completed') {
+            console.log('Status completed detectado:', status);
             setExecutionMessage('Componente generado exitosamente y listo para descarga');
             setIsExecuting(false);
-            stopPolling();
             setAppStatus(status);
-          } else if (status.status === 'RUNNING') {
+            stopPolling();
+            return; 
+          } else if (status.status === 'running') {
             setExecutionMessage('Componente en ejecución...');
-          } else if (status.status === 'ERROR') {
+          } else if (status.status === 'error') {
             setExecutionMessage('Error en la generación del componente');
             setIsExecuting(false);
+            setAppStatus(status);
             stopPolling();
+            return; 
           }
         }
       } catch (error) {
@@ -164,6 +164,7 @@ const Generador: React.FC = () => {
 
   const stopPolling = () => {
     if (pollingInterval) {
+      console.log('Deteniendo polling...');
       clearInterval(pollingInterval);
       setPollingInterval(null);
     }
@@ -195,15 +196,29 @@ const Generador: React.FC = () => {
     setIsExecuting(false);
     setExecutionMessage('');
     setAppStatus(null);
-    setLogs([]);
-    setShowLogs(false);
     setIsDownloading(false);
   };
 
   return (
     <div className="generador-content">
       <div className="generador-inner">
-        <h2> Generación de componentes</h2>
+        <h2>Validación de Estructura</h2>
+        
+
+         <div className="auth-info" style={{ 
+           background: '#f8f9fa', 
+           padding: '16px', 
+           borderRadius: '8px', 
+           marginBottom: '24px',
+           border: '1px solid #e9ecef'
+         }}>
+           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
+             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
+             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
+           </div>
+         </div>
         
         <form className="generador-form" autoComplete="off">
           <div className="form-group search-container">
@@ -244,7 +259,7 @@ const Generador: React.FC = () => {
             )}
           </div>
           <div className="button-group">
-            {/* <button type="button" className="btn validar">Validar</button> */}
+            <button type="button" className="btn validar">Validar</button>
             <button 
               type="button" 
               className={`btn generar ${selectedApp ? 'enabled' : 'disabled'}`}
@@ -255,7 +270,7 @@ const Generador: React.FC = () => {
             </button>
           </div>
         </form>
-        {/* <div className="tabla-container">
+        <div className="tabla-container">
           <table className="tabla-generador">
             <thead>
               <tr>
@@ -270,7 +285,7 @@ const Generador: React.FC = () => {
 
             </tbody>
           </table>
-        </div> */}
+        </div>
       </div>
 
       {/* Modal de Logs */}
@@ -283,12 +298,6 @@ const Generador: React.FC = () => {
             <div className="modal-header">
               <h3>Generación de Componente: {selectedApp}</h3>
               <div className="header-actions">
-                <button 
-                  className="btn btn-toggle-logs" 
-                  onClick={() => setShowLogs(!showLogs)}
-                >
-                  {showLogs ? 'Ocultar Logs' : 'Ver Logs'}
-                </button>
                 <button className="close-button" onClick={closeLogModal}>×</button>
               </div>
             </div>
@@ -318,24 +327,8 @@ const Generador: React.FC = () => {
                 )}
               </div>
 
-              {showLogs && logs.length > 0 && (
-                <div className="logs-section">
-                  <h4>Logs de Ejecución</h4>
-                  <div className="logs-container">
-                    {logs.map((log, index) => (
-                      <div key={index} className={`log-entry log-${log.level?.toLowerCase() || 'unknown'}`}>
-                        <span className="log-timestamp">
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </span>
-                        <span className="log-level">[{log.level}]</span>
-                        <span className="log-message">{log.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
-              {isExecuting && appStatus?.status !== 'COMPLETED' &&(
+              {isExecuting && appStatus?.status !== 'completed' && (
                 <div className="loading-indicator">
                   <div className="spinner"></div>
                   <span>Monitoreando estado...</span>
@@ -344,7 +337,7 @@ const Generador: React.FC = () => {
             </div>
 
             <div className="modal-footer">
-              {appStatus?.status === 'COMPLETED' && !isExecuting &&(
+              {appStatus?.status === 'completed' && !isExecuting && (
                 <button 
                   className="btn btn-download" 
                   onClick={() => {
