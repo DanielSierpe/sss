@@ -1,123 +1,444 @@
-12s
-7m 42s
-Run santander-group-shared-assets/gln-alm-sonar-manager-action@v2.0.0
-Run santander-group-shared-assets/gln-cm-check-sec-and-qa-onboarding-action@v1
-Initializing assurance info retriever: Retrieve inputs 
-Loging to Management
-Starting token generation process!
-Authenticating in the Corporate Login
-Getting BKS Token from sts
-Getting JWT Token from sts
-Token generated successfully!
-Retrieving assurance info from Management
-Getting application assurance information from Management
-Check quality component assurance
-Retrieving Quality Assurance response from its API
-response.data: {"content":[{"id":174125,"component_id":"chl-dss-lowcodeportal","created_on":"2025-07-22T01:59:48.812Z","template":{"name":"React SPA","href":"/api/v1/catalog/templates/14/versions/2.4.0","version":"2.4.0"},"application":73,"name":"chl-lowcode-portal","short_name":"LOWCODEPORTAL","description":"chl-lowcode-portal","status":"ready","visible":true,"source_code_repository":{"url":"https://github.com/santander-group-chile-gln/chl-dss-lowcodeportal.git","status":"onboarded"},"quality_assurance":{"url":"https://gluon.gs.corp/sonarqube/dashboard?id=chl-dss-lowcodeportal","status":"onboarded"},"security_assurance":{"url":"https://ssc.santander.fortifyhosted.com/html/ssc/version/301613/overview","status":"onboarded"},"catalog":{"url":"https://santander.service-now.com/nav_to.do?uri=/u_cmdb_ci_sw_component.do?sys_id=260f74cb1bf6ea54dc2f6573604bcb3b","status":"onboarded"},"provenance":"greenfield","scope":"component"}],"pageable":{"pageNumber":0,"pageSize":20,"sort":{"empty":true,"sorted":false,"unsorted":true},"offset":0,"paged":true,"unpaged":false},"last":true,"totalPages":1,"totalElements":1,"first":true,"size":20,"number":0,"sort":{"empty":true,"sorted":false,"unsorted":true},"numberOfElements":1,"empty":false}
-response.status: 200
-Quality Assurance: {"url":"https://gluon.gs.corp/sonarqube/dashboard?id=chl-dss-lowcodeportal","status":"onboarded"}
-Quality Assurance with status: onboarded
-Quality Assurance URL: "https://gluon.gs.corp/sonarqube/dashboard?id=chl-dss-lowcodeportal"
-Run sonarURL="https://gluon.gs.corp/sonarqube/dashboard?id=chl-dss-lowcodeportal"
-sonarURL: https://gluon.gs.corp/sonarqube/dashboard?id=chl-dss-lowcodeportal
-sonarProjectKey: chl-dss-lowcodeportal
-sonarInstanceUrl: https://gluon.gs.corp/sonarqube
-Getting SONAR_ID for URL https://gluon.gs.corp/sonarqube
-The SONAR_ID is SONAR_GLUON_COMMUNITY
-Getting properties of the instance SONAR_GLUON_COMMUNITY
-Run santander-group-shared-assets/gln-setup-runner-ohe-action@v2.0.2
-initializing createBackupJavaHome method
-Show JAVA_HOME backup: 
-maven_settings: 
-npm_settings: 
-pip_settings: 
-pypirc_settings: 
-initializing checkAndSetJavaHome method
-initializing setJavaDefault method
-Setting java_home to : /tmp/asdfdata/installs/java/adoptopenjdk-17.0.8+7
-initializing javaFixCertificates method
-asdf local java adoptopenjdk-17.0.8+7
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-asdf local maven 3.9.5
-
-asdf local nodejs 18.20.2
-
-asdf local python 3.11.5
-
-cacerts already fixed for this version.
-Run santander-group-shared-assets/gln-alm-sonar-action@v1.7.0
-Run echo "::group::Set Sonar parameters"
-Set Sonar parameters
-Run echo "::group::Sonar Scanner For projects No Maven"
-Sonar Scanner For projects No Maven
-Run santander-group-shared-assets/gln-alm-check-waiver-action@1.5.0
-Starting waiver process...
-Getting application information from Managment
-Starting token generation process!
-Authenticating in the Corporate Login
-Getting BKS Token from sts
-Getting JWT Token from sts
-Token generated successfully!
-Retrieving component from Management
-Application ID: 73
-Getting waiver from: https://gluon.gs.corp/exceptionmanager/api/applications/73/quality-waiver
-Retrieving waiver response from its API
-response.data: []
-response.status: 200
-Error: 
-The previous QA job may have failed for various reasons, please review it.❌
-An attempt was made to check for active waivers, but none were found.❌
-Run msg="Result Sonar Analysis FAILED"
-  msg="Result Sonar Analysis FAILED"
-  if [[ "" == "None" || "failed" == "success" ]]; then
-    echo "::warning::$msg"
-  else
-    echo "::error::$msg"
-  fi
-  shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
-  env:
-    JAVA_HOME: /tmp/asdfdata/installs/java/adoptopenjdk-17.0.8+7
-    IS_MAVEN: false
-    REPORT_PATH: .sonar
-Error: Result Sonar Analysis FAILED
-Run santander-group-shared-assets/gln-alm-data-search-engine-application-action@2.0.0
-  with:
-    component_id: chl-dss-lowcodeportal
-    instance: https://vpc-sgtp1airopsopsglngene001-x6ppfabqb6pap7telaeh64f6hq.eu-west-1.es.amazonaws.com
-    alias: alm-nextgen-workflows-reusable
-    type: _doc
-    auth-type: Basic
-    token: ***
-    job-type: sonar
-    parameters: {
-    "STATUS":"failure",
-    "STAGE":"QG_result",
-    "URL":"",
-    "SONAR_MAVEN_PLUGIN":"3.11.0.3922",
-    "SONAR_SCANNER_VERSION":"5.0.1.3006",
-    "SONAR_PROJECT_KEY":"chl-dss-lowcodeportal",
-    "VERSION":"0.0.2-BETA",
-    "SONAR_PROPERTIES":"-Dsonar.sources=src -Dsonar.tests=. -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts,**/*.test.tsx -Dsonar.javascript.coveragePlugin=lcov -Dsonar.javascript.lcov.reportPath=coverage/**/lcov.info -Dsonar.typescript.lcov.reportPaths=coverage/**/lcov.info -DtestExecutionReportPaths=test-result/ut_report.xml,ut_report.xml -Dsonar.projectVersion=0.0.2-BETA",
-    "CRITERIA":"",
-    "WAIVER":"None",
-    "WAIVER_ID":"None"
+// Mock de AuthService
+vi.mock('../AuthService', () => ({
+  default: {
+    getValidToken: vi.fn()
   }
-  
-    job-status: success
-  env:
-    JAVA_HOME: /tmp/asdfdata/installs/java/adoptopenjdk-17.0.8+7
-    IS_MAVEN: false
-    REPORT_PATH: .sonar
-Getting parameters
-/usr/bin/git --no-pager show -s --format='%ae' HEAD
-'daniel.sierpe@servexternos.santander.cl'
-Notice: 👨‍💻 User Email: 'daniel.sierpe@servexternos.santander.cl'
+}));
 
-Configuring metrics to be sent based on jobType = sonar
-✅ DataSearchEngine URL: https://vpc-sgtp1airopsopsglngene001-x6ppfabqb6pap7telaeh64f6hq.eu-west-1.es.amazonaws.com/alm-nextgen-workflows-reusable/_doc
+// Mock de import.meta.env usando vi.stubEnv
+vi.stubEnv('VITE_EXECUTOR_BASE_URL', '/executor/v1');
+vi.stubEnv('VITE_EXECUTOR_EXECUTE_ENDPOINT', '/execute');
+vi.stubEnv('VITE_EXECUTOR_STATUS_ENDPOINT', '/status');
+vi.stubEnv('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', '/generated-project');
 
-🚀 Sending data to DataSearchEngine... 
-Payload: {"@timestamp":"2025-09-12T20:43:26.882Z","data":{"job":{"EXECUTION_TYPE":"build-sonar","RESULT":"success","URL":"","CRITERIA":"","WAIVER":"None","WAIVER_ID":"None","VERSION":"0.0.2-BETA","SONAR_PROJECT_KEY":"chl-dss-lowcodeportal","SONAR_PROPERTIES":"-Dsonar.sources=src -Dsonar.tests=. -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts,**/*.test.tsx -Dsonar.javascript.coveragePlugin=lcov -Dsonar.javascript.lcov.reportPath=coverage/**/lcov.info -Dsonar.typescript.lcov.reportPaths=coverage/**/lcov.info -DtestExecutionReportPaths=test-result/ut_report.xml,ut_report.xml -Dsonar.projectVersion=0.0.2-BETA","SONAR_MAVEN_PLUGIN":"3.11.0.3922","SONAR_SCANNER_VERSION":"5.0.1.3006"},"global":{"JOB_TYPE":"sonar","COMPONENT_ID":"chl-dss-lowcodeportal","GITHUB_URL":"https://github.com/santander-group-chile-gln","SELF_HOSTED_RUNNER_NAME":"npm-alm2-cmps-rd-2fnwj-d2jq4","WORKFLOW_RUN_ID":"17685328734","WORKFLOW_RUN_NUMBER":"79","WORKFLOW_NAME":"Quality","WORKFLOW_URL":"https://github.com/santander-group-chile-gln/chl-dss-lowcodeportal/actions/workflows/Quality.yml","WORKFLOW_EXECUTION_URL":"https://github.com/santander-group-chile-gln/chl-dss-lowcodeportal/actions/runs/17685328734","STAGE":"QG_result","GIT_REPOSITORY":"https://github.com/santander-group-chile-gln/chl-dss-lowcodeportal","GIT_ORGANIZATION":"santander-group-chile-gln","GIT_BRANCH_NAME":"42/merge","GIT_COMMIT":"417a434e2c4bfffbf9c67ab55068ceeb57a9b197","USER":"id34181-corporativo_sangroup","USER_EMAIL":"'daniel.sierpe@servexternos.santander.cl'\n"},"USER_DATA":""}}
-Authorization Header: Basic ***
-🎉 Data sent successfully!
-DataSearchEngine response status: 201
+import { ExecutorService } from '../ExecutorService';
+
+// Mock de fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock de atob y btoa
+global.atob = vi.fn();
+global.btoa = vi.fn();
+
+// Mock de window.URL
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL
+  }
+});
+
+// Mock de document.createElement
+const mockLink = {
+  href: '',
+  download: '',
+  click: vi.fn()
+};
+const mockCreateElement = vi.fn(() => mockLink);
+Object.defineProperty(document, 'createElement', {
+  value: mockCreateElement
+});
+
+// Mock de document.body
+const mockBody = {
+  appendChild: vi.fn(),
+  removeChild: vi.fn()
+};
+Object.defineProperty(document, 'body', {
+  value: mockBody
+});
+
+describe('ExecutorService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+
+  describe('executeScript', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+
+    it('debería ejecutar script exitosamente', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true })
+      });
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Componente test-app iniciado correctamente');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/executor/v1/execute?app-name=test-app',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-token'
+          })
+        })
+      );
+    });
+
+    it('debería reintentar con barra final en caso de error 405', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      // Primera llamada devuelve 405
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 405
+      });
+      
+      // Segunda llamada (con barra final) es exitosa
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true })
+      });
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenNthCalledWith(2,
+        '/executor/v1/execute?app-name=test-app/',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-token'
+          })
+        })
+      );
+    });
+
+    it('debería manejar errores HTTP del servidor', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error'
+      });
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Error 500: Internal Server Error');
+    });
+
+    it('debería manejar errores desconocidos', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce('Unknown error');
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Error desconocido');
+    });
+  });
+
+  describe('getAppStatus', () => {
+    it('debería retornar null cuando no hay token', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería retornar null para aplicaciones no encontradas', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404
+      });
+
+      const result = await ExecutorService.getAppStatus('non-existent-app');
+
+      expect(result).toBeNull();
+    });
+
+    it('debería manejar errores HTTP del servidor', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error'
+      });
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toBeNull();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toBeNull();
+    });
+
+    it('debería obtener el estado exitosamente', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockStatus = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatus
+      });
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toEqual(mockStatus);
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/executor/v1/status/test-app',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer mock-token'
+          })
+        })
+      );
+    });
+
+    it('debería incluir logs en la respuesta del status', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockStatusWithLogs = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING',
+        logs: [
+          {
+            timestamp: '2024-01-01T00:00:00Z',
+            level: 'INFO',
+            message: 'Aplicación iniciada'
+          },
+          {
+            timestamp: '2024-01-01T00:01:00Z',
+            level: 'INFO',
+            message: 'Procesando componente'
+          }
+        ]
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatusWithLogs
+      });
+
+      const result = await ExecutorService.getAppStatus('test-app');
+
+      expect(result).toEqual(mockStatusWithLogs);
+      expect(result?.logs).toHaveLength(2);
+      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    });
+  });
+
+
+  describe('downloadGeneratedProject', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores HTTP del servidor', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error'
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Error 500: Internal Server Error');
+    });
+
+    it('debería manejar errores cuando no hay base64 en la respuesta', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}) // Sin base64
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+    });
+
+    it('debería manejar base64 vacío o inválido', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ base64: '' }) // Base64 vacío
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('El contenido base64 está vacío o es inválido');
+    });
+
+    it('debería descargar el proyecto exitosamente', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockBase64 = 'dGVzdCBkYXRh'; // "test data" en base64
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ base64: mockBase64 })
+      });
+
+      // Mock de atob para simular la conversión
+      vi.mocked(global.atob).mockReturnValue('test data');
+      
+      // Mock de createObjectURL
+      mockCreateObjectURL.mockReturnValue('blob:mock-url');
+      
+      // Mock de setTimeout para evitar el delay real
+      vi.spyOn(global, 'setTimeout').mockImplementation((fn) => {
+        fn();
+        return 1 as any;
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Proyecto test-app descargado exitosamente como test-app-generated-project.tar.gz');
+      
+      // Verificar que se creó el enlace de descarga
+      expect(mockCreateElement).toHaveBeenCalledWith('a');
+      expect(mockLink.href).toBe('blob:mock-url');
+      expect(mockLink.download).toBe('test-app-generated-project.tar.gz');
+      expect(mockLink.click).toHaveBeenCalled();
+      expect(mockBody.appendChild).toHaveBeenCalledWith(mockLink);
+      expect(mockBody.removeChild).toHaveBeenCalledWith(mockLink);
+    });
+
+    it('debería manejar errores en el procesamiento de base64', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockBase64 = 'invalid-base64';
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ base64: mockBase64 })
+      });
+
+      // Mock de atob para que lance un error
+      vi.mocked(global.atob).mockImplementation(() => {
+        throw new Error('Invalid base64');
+      });
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Error al procesar el contenido base64 del archivo');
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+
+    it('debería manejar errores desconocidos', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockRejectedValueOnce('Unknown error');
+
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Error desconocido');
+    });
+  });
+});
