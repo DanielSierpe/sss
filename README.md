@@ -1,240 +1,159 @@
-import AuthService from './AuthService';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-export interface AppStatus {
-  app: string;
-  startTime: string;
-  version: string;
-  status: 'STARTING' | 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'ERROR';
-  logs?: ExecutionLog[];
-}
-
-export interface ExecutionLog {
-  timestamp: string;
-  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
-  message: string;
-}
-
-export class ExecutorService {
-  private static readonly BASE_URL = import.meta.env.VITE_EXECUTOR_BASE_URL;
-  private static readonly EXECUTE_ENDPOINT = import.meta.env.VITE_EXECUTOR_EXECUTE_ENDPOINT;
-  private static readonly STATUS_ENDPOINT = import.meta.env.VITE_EXECUTOR_STATUS_ENDPOINT;
-  private static readonly GENERATED_PROJECT_ENDPOINT = import.meta.env.VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT;
-
-  /**
-   * Valida que las variables de entorno estén configuradas
-   */
-  private static validateConfig(): void {
-    const requiredVars = [
-      'VITE_EXECUTOR_BASE_URL',
-      'VITE_EXECUTOR_EXECUTE_ENDPOINT',
-      'VITE_EXECUTOR_STATUS_ENDPOINT',
-      'VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT'
-    ];
-
-    const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
-    
-    if (missingVars.length > 0) {
-      throw new Error(`Variables de entorno faltantes: ${missingVars.join(', ')}`);
-    }
+// Mock de AuthService
+vi.mock('../AuthService', () => ({
+  default: {
+    getValidToken: vi.fn()
   }
+}));
 
-  /**
-   * Ejecuta un script para generar un componente
-   */
-  static async executeScript(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return { success: false, message: 'No hay token de autenticación disponible' };
-      }
+// Mock de import.meta.env usando vi.stubEnv
+vi.stubEnv('VITE_EXECUTOR_BASE_URL', '/executor/v1');
+vi.stubEnv('VITE_EXECUTOR_EXECUTE_ENDPOINT', '/execute');
+vi.stubEnv('VITE_EXECUTOR_STATUS_ENDPOINT', '/status');
+vi.stubEnv('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', '/generated-project');
 
-      this.validateConfig();
+import { ExecutorService } from '../ExecutorService';
 
-      const url = `${this.BASE_URL}${this.EXECUTE_ENDPOINT}?app-name=${encodeURIComponent(appName)}`;
+// Mock de fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock de atob y btoa
+global.atob = vi.fn();
+global.btoa = vi.fn();
+
+// Mock de window.URL
+const mockCreateObjectURL = vi.fn();
+const mockRevokeObjectURL = vi.fn();
+Object.defineProperty(window, 'URL', {
+  value: {
+    createObjectURL: mockCreateObjectURL,
+    revokeObjectURL: mockRevokeObjectURL
+  }
+});
+
+// Mock de document.createElement
+const mockLink = {
+  href: '',
+  download: '',
+  click: vi.fn()
+};
+const mockCreateElement = vi.fn(() => mockLink);
+Object.defineProperty(document, 'createElement', {
+  value: mockCreateElement
+});
+
+// Mock de document.body
+const mockBody = {
+  appendChild: vi.fn(),
+  removeChild: vi.fn()
+};
+Object.defineProperty(document, 'body', {
+  value: mockBody
+});
+
+describe('ExecutorService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+
+  describe('executeScript', () => {
+    it('debería manejar errores de autenticación', async () => {
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
+
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No hay token de autenticación disponible');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('debería manejar errores de red', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      console.log('Ejecutando script para:', appName);
-      console.log('URL:', url);
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      let response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      const result = await ExecutorService.executeScript('test-app');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Network error');
+    });
+  });
+
+  describe('getAppStatus', () => {
+    it('debería retornar null para aplicaciones no encontradas', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404
       });
 
-      // Si el servidor devuelve 405 (p. ej. por diferencia con la barra final), reintentar
-      if (response.status === 405) {
-        const urlWithSlash = url.endsWith('/') ? url : `${url}/`;
-        console.warn('Recibido 405. Reintentando con barra final:', urlWithSlash);
-        response = await fetch(urlWithSlash, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
+      const result = await ExecutorService.getAppStatus('non-existent-app');
+
+      expect(result).toBeNull();
+    });
+
+    it('debería incluir logs en la respuesta del status', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      
+      const mockStatusWithLogs = {
+        app: 'test-app',
+        startTime: '2024-01-01T00:00:00Z',
+        version: '1.0.0',
+        status: 'RUNNING',
+        logs: [
+          {
+            timestamp: '2024-01-01T00:00:00Z',
+            level: 'INFO',
+            message: 'Aplicación iniciada'
           },
-        });
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('Script ejecutado exitosamente:', result);
-      
-      return {
-        success: true,
-        message: `Componente ${appName} iniciado correctamente`
+          {
+            timestamp: '2024-01-01T00:01:00Z',
+            level: 'INFO',
+            message: 'Procesando componente'
+          }
+        ]
       };
-    } catch (error) {
-      console.error('Error ejecutando script:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
-    }
-  }
 
-  /**
-   * Obtiene el estado de una aplicación
-   */
-  static async getAppStatus(appName: string): Promise<AppStatus | null> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return null;
-      }
-
-      this.validateConfig();
-
-      const url = `${this.BASE_URL}${this.STATUS_ENDPOINT}/${encodeURIComponent(appName)}`;
-      
-      console.log('Obteniendo estado de la app:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStatusWithLogs
       });
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // App no encontrada
-        }
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+      const result = await ExecutorService.getAppStatus('test-app');
 
-      const status: AppStatus = await response.json();
-      return status;
-    } catch (error) {
-      console.error('Error obteniendo estado de la app:', error);
-      return null;
-    }
-  }
+      expect(result).toEqual(mockStatusWithLogs);
+      expect(result?.logs).toHaveLength(2);
+      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
+    });
+  });
 
 
-  /**
-   * Descarga el proyecto generado como TAR.GZ
-   */
-  static async downloadGeneratedProject(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return { success: false, message: 'No hay token de autenticación disponible' };
-      }
-
-      this.validateConfig();
-
-      const url = `${this.BASE_URL}${this.GENERATED_PROJECT_ENDPOINT}?app=${encodeURIComponent(appName)}`;
+  describe('downloadGeneratedProject', () => {
+    it('debería manejar errores en la descarga', async () => {
+      const mockToken = 'mock-token';
+      const AuthService = await import('../AuthService');
+      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      console.log('Descargando proyecto generado para:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({}) // Sin base64
       });
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
+      const result = await ExecutorService.downloadGeneratedProject('test-app');
 
-      const result = await response.json();
-      console.log('Respuesta del servidor:', result);
-      
-      // Buscar el base64 en diferentes campos posibles
-      const base64Data = result.base64 || result.data || result.content || result.file;
-      
-      if (!base64Data) {
-        console.error('No se encontró base64 en la respuesta:', result);
-        throw new Error('No se encontró el contenido del proyecto en la respuesta');
-      }
-
-      // Validar que el base64 no esté vacío
-      if (typeof base64Data !== 'string' || base64Data.trim() === '') {
-        throw new Error('El contenido base64 está vacío o es inválido');
-      }
-
-      const fileName = `${appName}-generated-project.tar.gz`;
-      
-      try {
-        // Convertir base64 a bytes de manera más robusta
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        // Crear blob como TAR.GZ
-        const blob = new Blob([bytes], { type: 'application/gzip' });
-        
-        console.log('Blob creado:', {
-          size: blob.size,
-          type: blob.type
-        });
-        
-        // Crear enlace de descarga
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = fileName;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Limpiar URL después de un breve delay
-        setTimeout(() => {
-          window.URL.revokeObjectURL(downloadUrl);
-        }, 100);
-        
-        return {
-          success: true,
-          message: `Proyecto ${appName} descargado exitosamente como ${fileName}`
-        };
-        
-      } catch (base64Error) {
-        console.error('Error procesando base64:', base64Error);
-        throw new Error('Error al procesar el contenido base64 del archivo');
-      }
-      
-    } catch (error) {
-      console.error('Error descargando proyecto:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
-    }
-  }
-
-}
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
+    });
+  });
+});
