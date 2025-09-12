@@ -1,452 +1,337 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React, { useState, useEffect, useRef } from 'react';
+import { ExecutorService } from '../services/ExecutorService';
+import type { AppStatus } from '../services/ExecutorService';
+import './Generador.css';
 
-// Mock de AuthService
-vi.mock('../AuthService', () => ({
-  default: {
-    getValidToken: vi.fn()
-  }
-}));
+const Generador: React.FC = () => {
 
-// Mock de import.meta.env usando vi.stubEnv
-vi.stubEnv('VITE_EXECUTOR_BASE_URL', 'https://platform.dcloud.cl.bsch/executor/v1');
-vi.stubEnv('VITE_EXECUTOR_EXECUTE_ENDPOINT', '/execute');
-vi.stubEnv('VITE_EXECUTOR_STATUS_ENDPOINT', '/status');
-vi.stubEnv('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', '/generated-project');
+  
+  // Estados para la búsqueda y selección
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedApp, setSelectedApp] = useState<string>('');
+  
+  // Estados para el modal de logs
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionMessage, setExecutionMessage] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  // Referencias
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const logModalRef = useRef<HTMLDivElement>(null);
+  
+  // Polling para actualizar el estado
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
-import { ExecutorService } from '../ExecutorService';
+  // Actualizar selectedApp cuando cambia searchQuery
+  useEffect(() => {
+    setSelectedApp(searchQuery.trim());
+  }, [searchQuery]);
 
-// Mock de fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+  // Limpiar polling al desmontar
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
-// Mock de atob y btoa
-global.atob = vi.fn();
-global.btoa = vi.fn();
+  // Cerrar modal al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (logModalRef.current && !logModalRef.current.contains(event.target as Node)) {
+        setShowLogModal(false);
+        stopPolling();
+      }
+    };
 
-// Mock de window.URL
-const mockCreateObjectURL = vi.fn();
-const mockRevokeObjectURL = vi.fn();
-Object.defineProperty(window, 'URL', {
-  value: {
-    createObjectURL: mockCreateObjectURL,
-    revokeObjectURL: mockRevokeObjectURL
-  }
-});
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-// Mock de document.createElement
-const mockLink = {
-  href: '',
-  download: '',
-  click: vi.fn(),
-  style: { display: 'none' }
-};
-const mockCreateElement = vi.fn(() => mockLink);
-Object.defineProperty(document, 'createElement', {
-  value: mockCreateElement
-});
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+  };
 
-// Mock de document.body
-const mockBody = {
-  appendChild: vi.fn(),
-  removeChild: vi.fn()
-};
-Object.defineProperty(document, 'body', {
-  value: mockBody
-});
+  const handleGenerateComponent = async () => {
+    if (!selectedApp) return;
 
-describe('ExecutorService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    try {
+      setIsExecuting(true);
+      setExecutionMessage('Iniciando generación del componente...');
+      setShowLogModal(true);
 
-
-  describe('executeScript', () => {
-    it('debería manejar errores de autenticación', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No hay token de autenticación disponible');
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      // Ejecutar el script
+      const result = await ExecutorService.executeScript(selectedApp);
       
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Network error');
-    });
-
-    it('debería ejecutar script exitosamente', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+      if (result.success) {
+        setExecutionMessage('Componente iniciado correctamente. Monitoreando estado...');
+        startPolling();
+      } else {
+        // Verificar si es un error de componente no encontrado
+        if (result.message.includes('404') || result.message.includes('not found') || result.message.includes('No se encontró')) {
+          setExecutionMessage('Error: componente no existe');
+        } else {
+          setExecutionMessage(`Error: ${result.message}`);
+        }
+        setIsExecuting(false);
+      }
+    } catch (error) {
+      console.error('Error generando componente:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true })
-      });
+      // Verificar si es un error de componente no encontrado
+      if (errorMessage.includes('404') || errorMessage.includes('not found') || errorMessage.includes('No se encontró')) {
+        setExecutionMessage('Error: componente no existe');
+      } else {
+        setExecutionMessage(`Error: ${errorMessage}`);
+      }
+      setIsExecuting(false);
+    }
+  };
 
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('Componente test-app iniciado correctamente');
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://platform.dcloud.cl.bsch/executor/v1/execute?app-name=test-app',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token',
-            'Content-Type': 'application/json'
-          })
-        })
-      );
-    });
-
-    it('debería reintentar con barra final en caso de error 405', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      // Primera llamada devuelve 405
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 405
-      });
-      
-      // Segunda llamada (con barra final) es exitosa
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true })
-      });
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(mockFetch).toHaveBeenNthCalledWith(2,
-        'https://platform.dcloud.cl.bsch/executor/v1/execute?app-name=test-app/',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token',
-            'Content-Type': 'application/json'
-          })
-        })
-      );
-    });
-
-    it('debería manejar errores HTTP del servidor', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error'
-      });
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error 500: Internal Server Error');
-    });
-
-    it('debería manejar errores desconocidos', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce('Unknown error');
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error desconocido');
-    });
-  });
-
-  describe('getAppStatus', () => {
-    it('debería retornar null cuando no hay token', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toBeNull();
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('debería retornar null para aplicaciones no encontradas', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404
-      });
-
-      const result = await ExecutorService.getAppStatus('non-existent-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería manejar errores HTTP del servidor', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error'
-      });
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería obtener el estado exitosamente', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockStatus = {
-        app: 'test-app',
-        startTime: '2024-01-01T00:00:00Z',
-        version: '1.0.0',
-        status: 'RUNNING'
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatus
-      });
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toEqual(mockStatus);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://platform.dcloud.cl.bsch/executor/v1/status/test-app',
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token',
-            'Content-Type': 'application/json'
-          })
-        })
-      );
-    });
-
-    it('debería incluir logs en la respuesta del status', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockStatusWithLogs = {
-        app: 'test-app',
-        startTime: '2024-01-01T00:00:00Z',
-        version: '1.0.0',
-        status: 'RUNNING',
-        logs: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            level: 'INFO',
-            message: 'Aplicación iniciada'
-          },
-          {
-            timestamp: '2024-01-01T00:01:00Z',
-            level: 'INFO',
-            message: 'Procesando componente'
+  const startPolling = () => {
+    console.log('Iniciando polling...');
+    let pollingAttempts = 0;
+    const maxAttempts = 5; // Máximo 5 intentos para detectar si el componente no existe
+    
+    const interval = setInterval(async () => {
+      try {
+        const status = await ExecutorService.getAppStatus(selectedApp);
+        pollingAttempts++;
+        
+        if (status) {
+          setAppStatus(status);
+          
+          if (status.status === 'COMPLETED') {
+            console.log('Status COMPLETED detectado:', status);
+            setExecutionMessage('Componente generado exitosamente y listo para descarga');
+            setIsExecuting(false);
+            setAppStatus(status);
+            clearInterval(interval);
+            setPollingInterval(null);
+            console.log('Polling detenido por COMPLETED');
+            return; 
+          } else if (status.status === 'RUNNING') {
+            setExecutionMessage('Componente en ejecución...');
+          } else if (status.status === 'ERROR') {
+            setExecutionMessage('Error en la generación del componente');
+            setIsExecuting(false);
+            setAppStatus(status);
+            clearInterval(interval);
+            setPollingInterval(null);
+            console.log('Polling detenido por ERROR');
+            return; 
           }
-        ]
-      };
+        } else {
+          // Si no hay status y hemos intentado varias veces, probablemente el componente no existe
+          if (pollingAttempts >= maxAttempts) {
+            console.log('Componente no encontrado después de', maxAttempts, 'intentos');
+            setExecutionMessage('Error: componente no existe');
+            setIsExecuting(false);
+            clearInterval(interval);
+            setPollingInterval(null);
+            console.log('Polling detenido por componente no encontrado');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error en polling:', error);
+        pollingAttempts++;
+        
+        // Si hay errores repetidos, probablemente el componente no existe
+        if (pollingAttempts >= maxAttempts) {
+          setExecutionMessage('Error: componente no existe');
+          setIsExecuting(false);
+          clearInterval(interval);
+          setPollingInterval(null);
+          console.log('Polling detenido por errores repetidos');
+          return;
+        }
+      }
+    }, 2000); 
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatusWithLogs
-      });
+    setPollingInterval(interval);
+  };
 
-      const result = await ExecutorService.getAppStatus('test-app');
+  const stopPolling = () => {
+    if (pollingInterval) {
+      console.log('Deteniendo polling...');
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  };
 
-      expect(result).toEqual(mockStatusWithLogs);
-      expect(result?.logs).toHaveLength(2);
-      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
-    });
-  });
+  const handleDownload = async () => {
+    if (!selectedApp) return;
 
-
-  describe('downloadGeneratedProject', () => {
-    it('debería manejar errores de autenticación', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No hay token de autenticación disponible');
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('debería manejar errores HTTP del servidor', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
+    try {
+      setIsDownloading(true);
+      const result = await ExecutorService.downloadGeneratedProject(selectedApp);
       
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error'
-      });
+      if (result.success) {
+        setExecutionMessage('Proyecto descargado exitosamente');
+      } else {
+        setExecutionMessage(`Error en descarga: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error descargando proyecto:', error);
+      setExecutionMessage(`Error en descarga: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
+  const closeLogModal = () => {
+    setShowLogModal(false);
+    stopPolling();
+    setIsExecuting(false);
+    setExecutionMessage('');
+    setAppStatus(null);
+    setIsDownloading(false);
+  };
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error 500: Internal Server Error');
-    });
+  return (
+    <div className="generador-content">
+      <div className="generador-inner">
+        <h2>Generación de Componentes</h2>
+        
 
-    it('debería manejar errores cuando no hay base64 en la respuesta', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}) // Sin base64
-      });
+         {/* <div className="auth-info" style={{ 
+           background: '#f8f9fa', 
+           padding: '16px', 
+           borderRadius: '8px', 
+           marginBottom: '24px',
+           border: '1px solid #e9ecef'
+         }}>
+           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
+           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
+             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
+             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
+           </div>
+         </div> */}
+        
+        <form className="generador-form" autoComplete="off">
+          <div className="form-group search-container">
+            <label htmlFor="openapi-name">Nombre del componente</label>
+            <div className="search-wrapper">
+              <input
+                ref={searchInputRef}
+                type="text"
+                id="openapi-name"
+                name="openapi-name"
+                placeholder="Ingresa el nombre del componente..."
+                className="search-input"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <div className="button-group">
+            {/* <button type="button" className="btn validar">Validar</button> */}
+            <button 
+              type="button" 
+              className={`btn generar ${selectedApp ? 'enabled' : 'disabled'}`}
+              onClick={handleGenerateComponent}
+              disabled={!selectedApp}
+            >
+              Generar componente
+            </button>
+          </div>
+        </form>
+        {/* <div className="tabla-container">
+          <table className="tabla-generador">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>path</th>
+                <th>Message</th>
+                <th>Severity</th>
+                <th>range</th>
+              </tr>
+            </thead>
+            <tbody>
 
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
+            </tbody>
+          </table>
+        </div> */}
+      </div>
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
-    });
+      {/* Modal de Logs */}
+      {showLogModal && (() => {
+        console.log('Renderizando modal, appStatus:', appStatus, 'showLogModal:', showLogModal);
+        return true;
+      })() && (
+        <div className="modal-overlay">
+          <div className="log-modal" ref={logModalRef}>
+            <div className="modal-header">
+              <h3>Generación de Componente: {selectedApp}</h3>
+              <div className="header-actions">
+                <button className="close-button" onClick={closeLogModal}>×</button>
+              </div>
+            </div>
+            
+            <div className="modal-content">
+              <div className="execution-status">
+                <div className="status-message">{executionMessage}</div>
+                {appStatus && (
+                  <div className="app-status">
+                    <div className="status-item">
+                      <span className="status-label">Estado:</span>
+                      <span className={`status-value status-${appStatus.status?.toLowerCase() || 'unknown'}`}>
+                        {appStatus.status || 'Desconocido'}
+                      </span>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">Versión:</span>
+                      <span className="status-value">{appStatus.version}</span>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">Inicio:</span>
+                      <span className="status-value">
+                        {new Date(appStatus.startTime).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-    it('debería manejar base64 vacío o inválido', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ base64: '   ' }) 
-      });
 
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
+              {isExecuting && appStatus?.status !== 'COMPLETED' && (
+                <div className="loading-indicator">
+                  <div className="spinner"></div>
+                  <span>Monitoreando estado...</span>
+                </div>
+              )}
+            </div>
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('El contenido base64 está vacío o es inválido');
-    });
+            <div className="modal-footer">
+              {appStatus?.status === 'COMPLETED' && !isExecuting && (
+                <button 
+                  className="btn btn-download" 
+                  onClick={() => {
+                    console.log('Botón descarga clickeado, appStatus:', appStatus);
+                    handleDownload();
+                  }}
+                  disabled={isDownloading}
+                >
+                  {isDownloading ? 'Descargando...' : 'Descargar Proyecto'}
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={closeLogModal}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
-    it('debería descargar el proyecto exitosamente', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockBase64 = 'dGVzdCBkYXRh'; // "test data" en base64
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ base64: mockBase64 })
-      });
-
-      // Mock de atob para simular la conversión
-      vi.mocked(global.atob).mockReturnValue('test data');
-      
-      // Mock de createObjectURL
-      mockCreateObjectURL.mockReturnValue('blob:mock-url');
-      
-      // Mock de setTimeout para ejecutar inmediatamente
-      vi.spyOn(global, 'setTimeout').mockImplementation((fn) => {
-        fn();
-        return 1 as any;
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      // Verificar que se hizo la llamada HTTP correcta
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://platform.dcloud.cl.bsch/executor/v1/generated-project?app=test-app',
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token'
-          })
-        })
-      );
-
-      // Verificar que el resultado es exitoso
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Proyecto test-app descargado exitosamente');
-    });
-
-    it('debería manejar errores en el procesamiento de base64', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockBase64 = 'invalid-base64';
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ base64: mockBase64 })
-      });
-
-      // Mock de atob para que lance un error
-      vi.mocked(global.atob).mockImplementation(() => {
-        throw new Error('Invalid base64');
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error al procesar el contenido base64 del archivo');
-    });
-
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Network error');
-    });
-
-    it('debería manejar errores desconocidos', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce('Unknown error');
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error desconocido');
-    });
-  });
-});
+export default Generador; 
