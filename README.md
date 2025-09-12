@@ -8,11 +8,7 @@ const Generador: React.FC = () => {
   
   // Estados para la búsqueda y selección
   const [searchQuery, setSearchQuery] = useState('');
-  const [availableApps, setAvailableApps] = useState<string[]>([]);
-  const [filteredApps, setFilteredApps] = useState<string[]>([]);
   const [selectedApp, setSelectedApp] = useState<string>('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   
   // Estados para el modal de logs
   const [showLogModal, setShowLogModal] = useState(false);
@@ -23,28 +19,15 @@ const Generador: React.FC = () => {
   
   // Referencias
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const logModalRef = useRef<HTMLDivElement>(null);
   
   // Polling para actualizar el estado
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
-  // Cargar aplicaciones disponibles al montar el componente
+  // Actualizar selectedApp cuando cambia searchQuery
   useEffect(() => {
-    loadAvailableApps();
-  }, []);
-
-  // Filtrar aplicaciones cuando cambia la búsqueda
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const filtered = availableApps.filter(app => 
-        app.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredApps(filtered);
-    } else {
-      setFilteredApps(availableApps);
-    }
-  }, [searchQuery, availableApps]);
+    setSelectedApp(searchQuery.trim());
+  }, [searchQuery]);
 
   // Limpiar polling al desmontar
   useEffect(() => {
@@ -55,12 +38,9 @@ const Generador: React.FC = () => {
     };
   }, [pollingInterval]);
 
-  // Cerrar dropdown al hacer clic fuera
+  // Cerrar modal al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
       if (logModalRef.current && !logModalRef.current.contains(event.target as Node)) {
         setShowLogModal(false);
         stopPolling();
@@ -71,33 +51,9 @@ const Generador: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const loadAvailableApps = async () => {
-    try {
-      setIsSearching(true);
-      const apps = await ExecutorService.searchApps('');
-      setAvailableApps(apps);
-      setFilteredApps(apps);
-    } catch (error) {
-      console.error('Error cargando aplicaciones:', error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
-    setShowDropdown(true);
-    
-    if (value !== selectedApp) {
-      setSelectedApp('');
-    }
-  };
-
-  const handleAppSelect = (app: string) => {
-    setSelectedApp(app);
-    setSearchQuery(app);
-    setShowDropdown(false);
   };
 
   const handleGenerateComponent = async () => {
@@ -115,12 +71,24 @@ const Generador: React.FC = () => {
         setExecutionMessage('Componente iniciado correctamente. Monitoreando estado...');
         startPolling();
       } else {
-        setExecutionMessage(`Error: ${result.message}`);
+        // Verificar si es un error de componente no encontrado
+        if (result.message.includes('404') || result.message.includes('not found') || result.message.includes('No se encontró')) {
+          setExecutionMessage('Error: componente no existe');
+        } else {
+          setExecutionMessage(`Error: ${result.message}`);
+        }
         setIsExecuting(false);
       }
     } catch (error) {
       console.error('Error generando componente:', error);
-      setExecutionMessage(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      
+      // Verificar si es un error de componente no encontrado
+      if (errorMessage.includes('404') || errorMessage.includes('not found') || errorMessage.includes('No se encontró')) {
+        setExecutionMessage('Error: componente no existe');
+      } else {
+        setExecutionMessage(`Error: ${errorMessage}`);
+      }
       setIsExecuting(false);
     }
   };
@@ -136,16 +104,16 @@ const Generador: React.FC = () => {
 
 
 
-          if (status.status === 'completed') {
-            console.log('Status completed detectado:', status);
+          if (status.status === 'COMPLETED') {
+            console.log('Status COMPLETED detectado:', status);
             setExecutionMessage('Componente generado exitosamente y listo para descarga');
             setIsExecuting(false);
             setAppStatus(status);
             stopPolling();
             return; 
-          } else if (status.status === 'running') {
+          } else if (status.status === 'RUNNING') {
             setExecutionMessage('Componente en ejecución...');
-          } else if (status.status === 'error') {
+          } else if (status.status === 'ERROR') {
             setExecutionMessage('Error en la generación del componente');
             setIsExecuting(false);
             setAppStatus(status);
@@ -221,41 +189,20 @@ const Generador: React.FC = () => {
         
         <form className="generador-form" autoComplete="off">
           <div className="form-group search-container">
-            <label htmlFor="openapi-name">Nombre openAPI</label>
-            <div className="search-wrapper" ref={dropdownRef}>
+            <label htmlFor="openapi-name">Nombre del componente</label>
+            <div className="search-wrapper">
               <input
                 ref={searchInputRef}
                 type="text"
                 id="openapi-name"
                 name="openapi-name"
-                placeholder={isSearching ? "Cargando aplicaciones..." : "Buscar aplicación..."}
+                placeholder="Ingresa el nombre del componente..."
                 className="search-input"
                 value={searchQuery}
                 onChange={handleSearchChange}
-                onFocus={() => setShowDropdown(true)}
                 autoComplete="off"
-                disabled={isSearching}
               />
-              {showDropdown && filteredApps.length > 0 && (
-                <div className="search-dropdown">
-                  {filteredApps.map((app, index) => (
-                    <div
-                      key={index}
-                      className="dropdown-item"
-                      onClick={() => handleAppSelect(app)}
-                    >
-                      {app}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
-            {selectedApp && (
-              <div className="selected-app">
-                <span className="selected-label">Aplicación seleccionada:</span>
-                <span className="selected-value">{selectedApp}</span>
-              </div>
-            )}
           </div>
           <div className="button-group">
             {/* <button type="button" className="btn validar">Validar</button> */}
@@ -327,7 +274,7 @@ const Generador: React.FC = () => {
               </div>
 
 
-              {isExecuting && appStatus?.status !== 'completed' && (
+              {isExecuting && appStatus?.status !== 'COMPLETED' && (
                 <div className="loading-indicator">
                   <div className="spinner"></div>
                   <span>Monitoreando estado...</span>
@@ -336,7 +283,7 @@ const Generador: React.FC = () => {
             </div>
 
             <div className="modal-footer">
-              {appStatus?.status === 'completed' && !isExecuting && (
+              {appStatus?.status === 'COMPLETED' && !isExecuting && (
                 <button 
                   className="btn btn-download" 
                   onClick={() => {
