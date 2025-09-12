@@ -1,387 +1,252 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuthContext } from '../contexts/AuthContext';
-import { ExecutorService } from '../services/ExecutorService';
-import type { AppStatus, ExecutionLog } from '../services/ExecutorService';
-import './Generador.css';
+import AuthService from './AuthService';
 
-const Generador: React.FC = () => {
-  const { isAuthenticated, token, isLoading } = useAuthContext();
-  
-  // Estados para la búsqueda y selección
-  const [searchQuery, setSearchQuery] = useState('');
-  const [availableApps, setAvailableApps] = useState<string[]>([]);
-  const [filteredApps, setFilteredApps] = useState<string[]>([]);
-  const [selectedApp, setSelectedApp] = useState<string>('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  
-  // Estados para el modal de logs
-  const [showLogModal, setShowLogModal] = useState(false);
-  const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [executionMessage, setExecutionMessage] = useState('');
-  const [showLogs, setShowLogs] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
-  
-  // Referencias
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const logModalRef = useRef<HTMLDivElement>(null);
-  
-  // Polling para actualizar el estado
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+export interface AppStatus {
+  app: string;
+  startTime: string;
+  version: string;
+  status: 'starting' | 'running' | 'completed' | 'stopped' | 'error';
+  logs?: ExecutionLog[];
+}
 
-  // Cargar aplicaciones disponibles al montar el componente
-  useEffect(() => {
-    loadAvailableApps();
-  }, []);
+export interface ExecutionLog {
+  timestamp: string;
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+  message: string;
+}
 
-  // Filtrar aplicaciones cuando cambia la búsqueda
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const filtered = availableApps.filter(app => 
-        app.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredApps(filtered);
-    } else {
-      setFilteredApps(availableApps);
-    }
-  }, [searchQuery, availableApps]);
+export class ExecutorService {
+  private static readonly BASE_URL = import.meta.env.VITE_EXECUTOR_BASE_URL;
+  private static readonly EXECUTE_ENDPOINT = import.meta.env.VITE_EXECUTOR_EXECUTE_ENDPOINT;
+  private static readonly STATUS_ENDPOINT = import.meta.env.VITE_EXECUTOR_STATUS_ENDPOINT;
+  private static readonly GENERATED_PROJECT_ENDPOINT = import.meta.env.VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT;
 
-  // Limpiar polling al desmontar
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [pollingInterval]);
+  /**
+   * Valida que las variables de entorno estén configuradas
+   */
+  private static validateConfig(): void {
+    const requiredVars = [
+      'VITE_EXECUTOR_BASE_URL',
+      'VITE_EXECUTOR_EXECUTE_ENDPOINT',
+      'VITE_EXECUTOR_STATUS_ENDPOINT',
+      'VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT'
+    ];
 
-  // Cerrar dropdown al hacer clic fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-      if (logModalRef.current && !logModalRef.current.contains(event.target as Node)) {
-        setShowLogModal(false);
-        stopPolling();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const loadAvailableApps = async () => {
-    try {
-      setIsSearching(true);
-      const apps = await ExecutorService.searchApps('');
-      setAvailableApps(apps);
-      setFilteredApps(apps);
-    } catch (error) {
-      console.error('Error cargando aplicaciones:', error);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    setShowDropdown(true);
+    const missingVars = requiredVars.filter(varName => !import.meta.env[varName]);
     
-    if (value !== selectedApp) {
-      setSelectedApp('');
+    if (missingVars.length > 0) {
+      throw new Error(`Variables de entorno faltantes: ${missingVars.join(', ')}`);
     }
-  };
+  }
 
-  const handleAppSelect = (app: string) => {
-    setSelectedApp(app);
-    setSearchQuery(app);
-    setShowDropdown(false);
-  };
-
-  const handleGenerateComponent = async () => {
-    if (!selectedApp) return;
-
+  /**
+   * Ejecuta un script para generar un componente
+   */
+  static async executeScript(appName: string): Promise<{ success: boolean; message: string }> {
     try {
-      setIsExecuting(true);
-      setExecutionMessage('Iniciando generación del componente...');
-      setShowLogModal(true);
-      setLogs([]);
-
-      // Ejecutar el script
-      const result = await ExecutorService.executeScript(selectedApp);
-      
-      if (result.success) {
-        setExecutionMessage('Componente iniciado correctamente. Monitoreando estado...');
-        startPolling();
-      } else {
-        setExecutionMessage(`Error: ${result.message}`);
-        setIsExecuting(false);
+      const token = await AuthService.getValidToken();
+      if (!token) {
+        return { success: false, message: 'No hay token de autenticación disponible' };
       }
+
+      this.validateConfig();
+
+      const url = `${this.BASE_URL}${this.EXECUTE_ENDPOINT}?app-name=${encodeURIComponent(appName)}`;
+      
+      console.log('Ejecutando script para:', appName);
+      console.log('URL:', url);
+
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Si el servidor devuelve 405 (p. ej. por diferencia con la barra final), reintentar
+      if (response.status === 405) {
+        const urlWithSlash = url.endsWith('/') ? url : `${url}/`;
+        console.warn('Recibido 405. Reintentando con barra final:', urlWithSlash);
+        response = await fetch(urlWithSlash, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Script ejecutado exitosamente:', result);
+      
+      return {
+        success: true,
+        message: `Componente ${appName} iniciado correctamente`
+      };
     } catch (error) {
-      console.error('Error generando componente:', error);
-      setExecutionMessage(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-      setIsExecuting(false);
+      console.error('Error ejecutando script:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error desconocido'
+      };
     }
-  };
+  }
 
-  const startPolling = () => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await ExecutorService.getAppStatus(selectedApp);
-        if (status) {
-          setAppStatus(status);
-          
-
-          if (status.logs && status.logs.length > 0) {
-            setLogs(status.logs);
-          }
-
-
-          if (status.status === 'COMPLETE') {
-            console.log('Status COMPLETE detectado:', status);
-            setExecutionMessage('Componente generado exitosamente y listo para descarga');
-            setIsExecuting(false);
-            stopPolling();
-          } else if (status.status === 'RUNNING') {
-            setExecutionMessage('Componente en ejecución...');
-          } else if (status.status === 'ERROR') {
-            setExecutionMessage('Error en la generación del componente');
-            setIsExecuting(false);
-            stopPolling();
-          }
-        }
-      } catch (error) {
-        console.error('Error en polling:', error);
-      }
-    }, 2000); 
-
-    setPollingInterval(interval);
-  };
-
-  const stopPolling = () => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!selectedApp) return;
-
+  /**
+   * Obtiene el estado de una aplicación
+   */
+  static async getAppStatus(appName: string): Promise<AppStatus | null> {
     try {
-      setIsDownloading(true);
-      const result = await ExecutorService.downloadGeneratedProject(selectedApp);
-      
-      if (result.success) {
-        setExecutionMessage('Proyecto descargado exitosamente');
-      } else {
-        setExecutionMessage(`Error en descarga: ${result.message}`);
+      const token = await AuthService.getValidToken();
+      if (!token) {
+        return null;
       }
+
+      this.validateConfig();
+
+      const url = `${this.BASE_URL}${this.STATUS_ENDPOINT}/${encodeURIComponent(appName)}`;
+      
+      console.log('Obteniendo estado de la app:', appName);
+      console.log('URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null; // App no encontrada
+        }
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const status: AppStatus = await response.json();
+      return status;
+    } catch (error) {
+      console.error('Error obteniendo estado de la app:', error);
+      return null;
+    }
+  }
+
+
+  /**
+   * Descarga el proyecto generado como TAR.GZ
+   */
+  static async downloadGeneratedProject(appName: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const token = await AuthService.getValidToken();
+      if (!token) {
+        return { success: false, message: 'No hay token de autenticación disponible' };
+      }
+
+      this.validateConfig();
+
+      const url = `${this.BASE_URL}${this.GENERATED_PROJECT_ENDPOINT}?app=${encodeURIComponent(appName)}`;
+      
+      console.log('Descargando proyecto generado para:', appName);
+      console.log('URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Respuesta del servidor:', result);
+      
+      // Buscar el base64 en diferentes campos posibles
+      const base64Data = result.base64 || result.data || result.content || result.file;
+      
+      if (!base64Data) {
+        console.error('No se encontró base64 en la respuesta:', result);
+        throw new Error('No se encontró el contenido del proyecto en la respuesta');
+      }
+
+      // Validar que el base64 no esté vacío
+      if (typeof base64Data !== 'string' || base64Data.trim() === '') {
+        throw new Error('El contenido base64 está vacío o es inválido');
+      }
+
+      const fileName = `${appName}-generated-project.tar.gz`;
+      
+      try {
+        // Convertir base64 a bytes de manera más robusta
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Crear blob como TAR.GZ
+        const blob = new Blob([bytes], { type: 'application/gzip' });
+        
+        console.log('Blob creado:', {
+          size: blob.size,
+          type: blob.type
+        });
+        
+        // Crear enlace de descarga
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Limpiar URL después de un breve delay
+        setTimeout(() => {
+          window.URL.revokeObjectURL(downloadUrl);
+        }, 100);
+        
+        return {
+          success: true,
+          message: `Proyecto ${appName} descargado exitosamente como ${fileName}`
+        };
+        
+      } catch (base64Error) {
+        console.error('Error procesando base64:', base64Error);
+        throw new Error('Error al procesar el contenido base64 del archivo');
+      }
+      
     } catch (error) {
       console.error('Error descargando proyecto:', error);
-      setExecutionMessage(`Error en descarga: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-    } finally {
-      setIsDownloading(false);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error desconocido'
+      };
     }
-  };
+  }
 
-  const closeLogModal = () => {
-    setShowLogModal(false);
-    stopPolling();
-    setIsExecuting(false);
-    setExecutionMessage('');
-    setAppStatus(null);
-    setLogs([]);
-    setShowLogs(false);
-    setIsDownloading(false);
-  };
-
-  return (
-    <div className="generador-content">
-      <div className="generador-inner">
-        <h2>Validación de Estructura</h2>
-        
-
-         <div className="auth-info" style={{ 
-           background: '#f8f9fa', 
-           padding: '16px', 
-           borderRadius: '8px', 
-           marginBottom: '24px',
-           border: '1px solid #e9ecef'
-         }}>
-           <h3 style={{ margin: '0 0 12px 0', color: '#495057' }}>Estado de Autenticación</h3>
-           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-             <div><strong>Autenticado:</strong> {isAuthenticated ? 'Sí' : 'No'}</div>
-             <div><strong>Cargando:</strong> {isLoading ? 'Sí' : 'No'}</div>
-             <div><strong>Token:</strong> {token ? `${token.substring(0, 20)}...` : 'No disponible'}</div>
-           </div>
-         </div>
-        
-        <form className="generador-form" autoComplete="off">
-          <div className="form-group search-container">
-            <label htmlFor="openapi-name">Nombre openAPI</label>
-            <div className="search-wrapper" ref={dropdownRef}>
-              <input
-                ref={searchInputRef}
-                type="text"
-                id="openapi-name"
-                name="openapi-name"
-                placeholder={isSearching ? "Cargando aplicaciones..." : "Buscar aplicación..."}
-                className="search-input"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onFocus={() => setShowDropdown(true)}
-                autoComplete="off"
-                disabled={isSearching}
-              />
-              {showDropdown && filteredApps.length > 0 && (
-                <div className="search-dropdown">
-                  {filteredApps.map((app, index) => (
-                    <div
-                      key={index}
-                      className="dropdown-item"
-                      onClick={() => handleAppSelect(app)}
-                    >
-                      {app}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedApp && (
-              <div className="selected-app">
-                <span className="selected-label">Aplicación seleccionada:</span>
-                <span className="selected-value">{selectedApp}</span>
-              </div>
-            )}
-          </div>
-          <div className="button-group">
-            <button type="button" className="btn validar">Validar</button>
-            <button 
-              type="button" 
-              className={`btn generar ${selectedApp ? 'enabled' : 'disabled'}`}
-              onClick={handleGenerateComponent}
-              disabled={!selectedApp}
-            >
-              Generar componente
-            </button>
-          </div>
-        </form>
-        <div className="tabla-container">
-          <table className="tabla-generador">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>path</th>
-                <th>Message</th>
-                <th>Severity</th>
-                <th>range</th>
-              </tr>
-            </thead>
-            <tbody>
-
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Modal de Logs */}
-      {showLogModal && (() => {
-        console.log('Renderizando modal, appStatus:', appStatus, 'showLogModal:', showLogModal);
-        return true;
-      })() && (
-        <div className="modal-overlay">
-          <div className="log-modal" ref={logModalRef}>
-            <div className="modal-header">
-              <h3>Generación de Componente: {selectedApp}</h3>
-              <div className="header-actions">
-                <button 
-                  className="btn btn-toggle-logs" 
-                  onClick={() => setShowLogs(!showLogs)}
-                >
-                  {showLogs ? 'Ocultar Logs' : 'Ver Logs'}
-                </button>
-                <button className="close-button" onClick={closeLogModal}>×</button>
-              </div>
-            </div>
-            
-            <div className="modal-content">
-              <div className="execution-status">
-                <div className="status-message">{executionMessage}</div>
-                {appStatus && (
-                  <div className="app-status">
-                    <div className="status-item">
-                      <span className="status-label">Estado:</span>
-                      <span className={`status-value status-${appStatus.status?.toLowerCase() || 'unknown'}`}>
-                        {appStatus.status || 'Desconocido'}
-                      </span>
-                    </div>
-                    <div className="status-item">
-                      <span className="status-label">Versión:</span>
-                      <span className="status-value">{appStatus.version}</span>
-                    </div>
-                    <div className="status-item">
-                      <span className="status-label">Inicio:</span>
-                      <span className="status-value">
-                        {new Date(appStatus.startTime).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {showLogs && logs.length > 0 && (
-                <div className="logs-section">
-                  <h4>Logs de Ejecución</h4>
-                  <div className="logs-container">
-                    {logs.map((log, index) => (
-                      <div key={index} className={`log-entry log-${log.level?.toLowerCase() || 'unknown'}`}>
-                        <span className="log-timestamp">
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </span>
-                        <span className="log-level">[{log.level}]</span>
-                        <span className="log-message">{log.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {isExecuting && (
-                <div className="loading-indicator">
-                  <div className="spinner"></div>
-                  <span>Monitoreando estado...</span>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              {appStatus?.status === 'COMPLETE' && (
-                <button 
-                  className="btn btn-download" 
-                  onClick={() => {
-                    console.log('Botón descarga clickeado, appStatus:', appStatus);
-                    handleDownload();
-                  }}
-                  disabled={isDownloading}
-                >
-                  {isDownloading ? 'Descargando...' : 'Descargar Proyecto'}
-                </button>
-              )}
-              <button className="btn btn-secondary" onClick={closeLogModal}>
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default Generador; 
+  
+  static async searchApps(query: string): Promise<string[]> {
+    const availableApps = [
+      'chl-dss-fraudlocal'
+    ];
+    if (!query.trim()) {
+      return availableApps;
+    }
+    return availableApps.filter(app => 
+      app.toLowerCase().includes(query.toLowerCase())
+    );
+  }
+}
