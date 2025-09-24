@@ -1,459 +1,227 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock de AuthService
-vi.mock('../AuthService', () => ({
-  default: {
-    getValidToken: vi.fn()
-  }
-}));
-
-// Mock de ConfigService para tomar valores desde param.json
-const configValues: Record<string, string> = {
-  VITE_EXECUTOR_BASE_URL: 'https://platform.dcloud.cl.bsch/executor/v1',
-  VITE_EXECUTOR_EXECUTE_ENDPOINT: '/execute',
-  VITE_EXECUTOR_STATUS_ENDPOINT: '/status',
-  VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT: '/generated-project'
+// Mock de localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
 };
-vi.mock('../ConfigService', () => ({
-  default: {
-    get: vi.fn(async (key: string, def?: string) => configValues[key] ?? def)
-  }
-}));
 
-import { ExecutorService } from '../ExecutorService';
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
 
 // Mock de fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+vi.stubGlobal('fetch', mockFetch);
 
-// Mock de atob y btoa
-global.atob = vi.fn();
-global.btoa = vi.fn();
+// Mock de btoa para Basic Auth
+global.btoa = vi.fn((str: string) => Buffer.from(str).toString('base64'));
 
-// Mock de window.URL
-const mockCreateObjectURL = vi.fn();
-const mockRevokeObjectURL = vi.fn();
-Object.defineProperty(window, 'URL', {
-  value: {
-    createObjectURL: mockCreateObjectURL,
-    revokeObjectURL: mockRevokeObjectURL
+// Mock de ConfigService para valores de param.json
+const cfg: Record<string, string> = {
+  VITE_JWT_ENDPOINT: 'https://ssm.dcloud.cl.bsch/oauth/token',
+  VITE_REFRESH_ENDPOINT: 'https://ssm.dcloud.cl.bsch/oauth/token',
+  VITE_REDIRECT_URI: 'https://webtools-portal.dcloud.cl.bsch/',
+  VITE_CLIENT_ID: 'webtools'
+};
+vi.mock('../ConfigService', () => ({
+  default: {
+    get: vi.fn(async (key: string, def?: string) => cfg[key] ?? def)
   }
-});
+}));
 
-// Mock de document.createElement
-const mockLink = {
-  href: '',
-  download: '',
-  click: vi.fn(),
-  style: { display: 'none' }
-};
-const mockCreateElement = vi.fn(() => mockLink);
-Object.defineProperty(document, 'createElement', {
-  value: mockCreateElement
-});
+// Importar AuthService después de configurar los mocks
+import AuthService from '../AuthService';
 
-// Mock de document.body
-const mockBody = {
-  appendChild: vi.fn(),
-  removeChild: vi.fn()
-};
-Object.defineProperty(document, 'body', {
-  value: mockBody
-});
-
-describe('ExecutorService', () => {
+describe('AuthService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
   });
 
-
-  describe('executeScript', () => {
-    it('debería manejar errores de autenticación', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No hay token de autenticación disponible');
-      expect(mockFetch).not.toHaveBeenCalled();
+  describe('getStoredToken', () => {
+    it('debería retornar el token almacenado', () => {
+      localStorageMock.getItem.mockReturnValue('stored-token');
+      const result = AuthService.getStoredToken();
+      expect(localStorageMock.getItem).toHaveBeenCalledWith('access_token');
+      expect(result).toBe('stored-token');
     });
 
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+    it('debería retornar null si no hay token', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.getStoredToken();
+      expect(result).toBeNull();
+    });
+  });
 
-      const result = await ExecutorService.executeScript('test-app');
+  describe('clearTokens', () => {
+    it('debería limpiar todos los tokens del localStorage', () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      AuthService.clearTokens();
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_type');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_in');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_at');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+      expect(consoleSpy).toHaveBeenCalledWith('Tokens limpiados del localStorage');
+      consoleSpy.mockRestore();
+    });
+  });
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Network error');
+  describe('isTokenExpired', () => {
+    it('debería retornar true si no hay fecha de expiración', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(true);
     });
 
-    it('debería ejecutar script exitosamente', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
+    it('debería retornar true si el token está expirado', () => {
+      const pastTime = new Date().getTime() - 1000;
+      localStorageMock.getItem.mockReturnValue(pastTime.toString());
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(true);
+    });
+
+    it('debería retornar false si el token no está expirado', () => {
+      const futureTime = new Date().getTime() + 1000000;
+      localStorageMock.getItem.mockReturnValue(futureTime.toString());
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getAuthHeader', () => {
+    it('debería retornar el header de autorización con token válido', () => {
+      const futureTime = new Date().getTime() + 1000000;
+      localStorageMock.getItem
+        .mockReturnValueOnce('test-token')
+        .mockReturnValueOnce('Bearer')
+        .mockReturnValueOnce(futureTime.toString());
+      const result = AuthService.getAuthHeader();
+      expect(result).toBe('Bearer test-token');
+    });
+
+    it('debería retornar null si no hay token', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.getAuthHeader();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getJWTToken (directo a backend)', () => {
+    it('debería llamar al endpoint con POST y x-www-form-urlencoded sin client_id', async () => {
+      const responseBody = {
+        access_token: 'acc',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'ref',
+      };
+      mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true })
-      });
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
 
-      const result = await ExecutorService.executeScript('test-app');
+      await AuthService.getJWTToken('code123');
 
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('Componente test-app iniciado correctamente');
+      // Verificar URL y body mediante la primera llamada
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [calledUrl, calledOptions] = (mockFetch.mock.calls[0] ?? []) as [string, any];
+      expect(calledUrl).toBe(cfg.VITE_JWT_ENDPOINT);
+      expect(calledOptions).toEqual(expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'oauth_type': 'iam',
+          'true-client-ip': '0.0.0.0',
+          Authorization: expect.stringContaining('Basic '),
+        }),
+        credentials: 'include',
+        mode: 'cors',
+      }));
+      const bodySent = String(calledOptions?.body ?? '');
+      expect(bodySent).toContain('grant_type=authorization_code');
+      expect(bodySent).toContain('code=code123');
+      expect(bodySent).toContain('redirect_uri=');
+      expect(bodySent).not.toContain('client_id=');
+
+      // Verificar guardado
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'acc');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_type', 'Bearer');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'ref');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
+    });
+
+    it('debería manejar respuesta no OK', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: vi.fn().mockResolvedValue('bad'),
+      } as any);
+
+      await expect(AuthService.getJWTToken('badcode')).rejects.toThrow('Error al obtener token: 400 Bad Request');
+    });
+  });
+
+  describe('refreshToken (directo a backend)', () => {
+    it('debería llamar al endpoint con POST y guardar token', async () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('ref') 
+        .mockReturnValueOnce('acc'); 
+
+      const responseBody = {
+        access_token: 'new-acc',
+        token_type: 'Bearer',
+        expires_in: 1800,
+        refresh_token: 'new-ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      const result = await AuthService.refreshToken();
+      expect(result?.access_token).toBe('new-acc');
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://platform.dcloud.cl.bsch/executor/v1/execute?app-name=test-app',
+        cfg.VITE_REFRESH_ENDPOINT,
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token',
-            'Content-Type': 'application/json'
-          })
+          headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+          body: expect.stringContaining('grant_type=refresh_token'),
         })
       );
     });
 
-    it('debería reintentar con barra final en caso de error 405', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      // Primera llamada devuelve 405
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 405
-      });
-      
-      // Segunda llamada (con barra final) es exitosa
-      mockFetch.mockResolvedValueOnce({
+    it('debería usar expiración por defecto si expires_in no viene', async () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('ref') 
+        .mockReturnValueOnce('acc');
+
+      const responseBody = {
+        access_token: 'na',
+        token_type: 'Bearer',
+
+      } as any;
+
+      mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true })
-      });
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
 
-      const result = await ExecutorService.executeScript('test-app');
+      await AuthService.refreshToken();
 
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(mockFetch).toHaveBeenNthCalledWith(2,
-        'https://platform.dcloud.cl.bsch/executor/v1/execute?app-name=test-app/',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token',
-            'Content-Type': 'application/json'
-          })
-        })
-      );
-    });
-
-    it('debería manejar errores HTTP del servidor', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
       
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error'
-      });
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error 500: Internal Server Error');
-    });
-
-    it('debería manejar errores desconocidos', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce('Unknown error');
-
-      const result = await ExecutorService.executeScript('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error desconocido');
-    });
-  });
-
-  describe('getAppStatus', () => {
-    it('debería retornar null cuando no hay token', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toBeNull();
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('debería retornar null para aplicaciones no encontradas', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404
-      });
-
-      const result = await ExecutorService.getAppStatus('non-existent-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería manejar errores HTTP del servidor', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error'
-      });
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toBeNull();
-    });
-
-    it('debería obtener el estado exitosamente', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockStatus = {
-        app: 'test-app',
-        startTime: '2024-01-01T00:00:00Z',
-        version: '1.0.0',
-        status: 'RUNNING'
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatus
-      });
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toEqual(mockStatus);
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://platform.dcloud.cl.bsch/executor/v1/status/test-app',
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token',
-            'Content-Type': 'application/json'
-          })
-        })
-      );
-    });
-
-    it('debería incluir logs en la respuesta del status', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockStatusWithLogs = {
-        app: 'test-app',
-        startTime: '2024-01-01T00:00:00Z',
-        version: '1.0.0',
-        status: 'RUNNING',
-        logs: [
-          {
-            timestamp: '2024-01-01T00:00:00Z',
-            level: 'INFO',
-            message: 'Aplicación iniciada'
-          },
-          {
-            timestamp: '2024-01-01T00:01:00Z',
-            level: 'INFO',
-            message: 'Procesando componente'
-          }
-        ]
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStatusWithLogs
-      });
-
-      const result = await ExecutorService.getAppStatus('test-app');
-
-      expect(result).toEqual(mockStatusWithLogs);
-      expect(result?.logs).toHaveLength(2);
-      expect(result?.logs?.[0].message).toBe('Aplicación iniciada');
-    });
-  });
-
-
-  describe('downloadGeneratedProject', () => {
-    it('debería manejar errores de autenticación', async () => {
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(null);
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No hay token de autenticación disponible');
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it('debería manejar errores HTTP del servidor', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error'
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error 500: Internal Server Error');
-    });
-
-    it('debería manejar errores cuando no hay base64 en la respuesta', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}) // Sin base64
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('No se encontró el contenido del proyecto en la respuesta');
-    });
-
-    it('debería manejar base64 vacío o inválido', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ base64: '   ' }) 
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('El contenido base64 está vacío o es inválido');
-    });
-
-    it('debería descargar el proyecto exitosamente', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockBase64 = 'dGVzdCBkYXRh'; // "test data" en base64
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ base64: mockBase64 })
-      });
-
-      // Mock de atob para simular la conversión
-      vi.mocked(global.atob).mockReturnValue('test data');
-      
-      // Mock de createObjectURL
-      mockCreateObjectURL.mockReturnValue('blob:mock-url');
-      
-      // Mock de setTimeout para ejecutar inmediatamente
-      vi.spyOn(global, 'setTimeout').mockImplementation((fn) => {
-        fn();
-        return 1 as any;
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      // Verificar que se hizo la llamada HTTP correcta
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://platform.dcloud.cl.bsch/executor/v1/generated-project?app=test-app',
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer mock-token'
-          })
-        })
-      );
-
-      // Verificar que el resultado es exitoso
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Proyecto test-app descargado exitosamente');
-    });
-
-    it('debería manejar errores en el procesamiento de base64', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      const mockBase64 = 'invalid-base64';
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ base64: mockBase64 })
-      });
-
-      // Mock de atob para que lance un error
-      vi.mocked(global.atob).mockImplementation(() => {
-        throw new Error('Invalid base64');
-      });
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error al procesar el contenido base64 del archivo');
-    });
-
-    it('debería manejar errores de red', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Network error');
-    });
-
-    it('debería manejar errores desconocidos', async () => {
-      const mockToken = 'mock-token';
-      const AuthService = await import('../AuthService');
-      vi.mocked(AuthService.default.getValidToken).mockResolvedValue(mockToken);
-      
-      mockFetch.mockRejectedValueOnce('Unknown error');
-
-      const result = await ExecutorService.downloadGeneratedProject('test-app');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toBe('Error desconocido');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
     });
   });
 });
