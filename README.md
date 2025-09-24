@@ -1,241 +1,251 @@
-import AuthService from './AuthService';
 import ConfigService from './ConfigService';
 
-export interface AppStatus {
-  app: string;
-  startTime: string;
-  version: string;
-  status: 'STARTING' | 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'ERROR';
-  logs?: ExecutionLog[];
+interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
 }
 
-export interface ExecutionLog {
-  timestamp: string;
-  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
-  message: string;
-}
+class AuthService {
+  private redirectUri: string | undefined = import.meta.env.VITE_REDIRECT_URI;
+  private clientId: string | undefined = import.meta.env.VITE_CLIENT_ID;
 
-export class ExecutorService {
-  private static async getConfigValues() {
-    const baseUrl = await ConfigService.get('VITE_EXECUTOR_BASE_URL', import.meta.env.VITE_EXECUTOR_BASE_URL);
-    const executeEndpoint = await ConfigService.get('VITE_EXECUTOR_EXECUTE_ENDPOINT', import.meta.env.VITE_EXECUTOR_EXECUTE_ENDPOINT);
-    const statusEndpoint = await ConfigService.get('VITE_EXECUTOR_STATUS_ENDPOINT', import.meta.env.VITE_EXECUTOR_STATUS_ENDPOINT);
-    const generatedEndpoint = await ConfigService.get('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT', import.meta.env.VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT);
-    return { baseUrl, executeEndpoint, statusEndpoint, generatedEndpoint };
+  constructor() {
+    // Cargar valores también desde param.json si existe
+    ConfigService.get('VITE_REDIRECT_URI', this.redirectUri).then(v => this.redirectUri = v);
+    ConfigService.get('VITE_CLIENT_ID', this.clientId).then(v => this.clientId = v);
   }
 
   /**
-   * Valida que las variables de entorno estén configuradas
+   * Obtiene el token JWT usando el código de autorización
+   * Usa el proxy configurado en Vite para evitar problemas de CORS y certificados
    */
-  private static async validateConfig(): Promise<void> {
-    const { baseUrl, executeEndpoint, statusEndpoint, generatedEndpoint } = await this.getConfigValues();
-    const missing: string[] = [];
-    if (!baseUrl) missing.push('VITE_EXECUTOR_BASE_URL');
-    if (!executeEndpoint) missing.push('VITE_EXECUTOR_EXECUTE_ENDPOINT');
-    if (!statusEndpoint) missing.push('VITE_EXECUTOR_STATUS_ENDPOINT');
-    if (!generatedEndpoint) missing.push('VITE_EXECUTOR_GENERATED_PROJECT_ENDPOINT');
-    if (missing.length > 0) {
-      throw new Error(`Variables de configuración faltantes: ${missing.join(', ')}`);
+  async getJWTToken(code: string): Promise<TokenResponse> {
+    console.log('Obteniendo token JWT con código:', code);
+    
+    if (!this.redirectUri) {
+      throw new Error('Configuración de OAuth incompleta. Verifique VITE_REDIRECT_URI.');
     }
-  }
 
-  /**
-   * Ejecuta un script para generar un componente
-   */
-  static async executeScript(appName: string): Promise<{ success: boolean; message: string }> {
+  
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: this.redirectUri
+    });
+
     try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return { success: false, message: 'No hay token de autenticación disponible' };
+      const endpoint = await ConfigService.get('VITE_JWT_ENDPOINT', import.meta.env.VITE_JWT_ENDPOINT);
+      if (!endpoint) {
+        throw new Error('Configuración de OAuth incompleta. Verifique VITE_JWT_ENDPOINT.');
       }
-
-      await this.validateConfig();
-      const { baseUrl, executeEndpoint } = await this.getConfigValues();
-      const url = `${baseUrl}${executeEndpoint}?app-name=${encodeURIComponent(appName)}`;
+      console.log('Endpoint OAuth:', endpoint);
+      console.log('Parámetros:', params.toString());
       
-      console.log('Ejecutando script para:', appName);
-      console.log('URL:', url);
-
-      let response = await fetch(url, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'true-client-ip': '0.0.0.0',
+          'oauth_type': 'iam',
+          'Authorization': 'Basic ' + btoa('webtools:webtools')
         },
+        body: params.toString(),
+        mode: 'cors',
+        credentials: 'include'
       });
 
-      // Si el servidor devuelve 405 (p. ej. por diferencia con la barra final), reintentar
-      if (response.status === 405) {
-        const urlWithSlash = url.endsWith('/') ? url : `${url}/`;
-        console.warn('Recibido 405. Reintentando con barra final:', urlWithSlash);
-        response = await fetch(urlWithSlash, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-      }
+      console.log('Respuesta del servidor:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText}`);
+        console.error('Error en la respuesta:', errorText);
+        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
       }
 
-      const result = await response.json();
-      console.log('Script ejecutado exitosamente:', result);
+      const tokenData: TokenResponse = await response.json();
+      console.log('Token obtenido exitosamente');
+      console.log('Estructura del token recibido:', JSON.stringify(tokenData, null, 2));
       
-      return {
-        success: true,
-        message: `Componente ${appName} iniciado correctamente`
-      };
+      this.saveToken(tokenData);
+      
+      return tokenData;
     } catch (error) {
-      console.error('Error ejecutando script:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
+      console.error('Error al obtener el token JWT:', error);
+      throw error;
     }
   }
 
-  /**
-   * Obtiene el estado de una aplicación
-   */
-  static async getAppStatus(appName: string): Promise<AppStatus | null> {
+  async refreshToken(): Promise<TokenResponse | null> {
+    if (!this.clientId) {
+      console.warn('No hay client_id configurado');
+      return null;
+    }
+
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      console.warn('No hay refresh token disponible');
+      return null;
+    }
+
+    const bodyParams = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: this.clientId,
+      refresh_token: refreshToken
+    });
+
     try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'true-client-ip': '0.0.0.0',
+        'oauth_type': 'iam',
+        'Authorization': 'Basic ' + btoa('webtools:webtools')
+      };
+
+      const endpoint = await ConfigService.get('VITE_REFRESH_ENDPOINT', import.meta.env.VITE_REFRESH_ENDPOINT);
+      if (!endpoint) {
+        console.warn('VITE_REFRESH_ENDPOINT no configurado');
+        this.clearTokens();
+        return null;
+      }
+      console.log('Endpoint refresh:', endpoint);
+      console.log('Parámetros refresh:', bodyParams.toString());
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: bodyParams.toString(),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      console.log('Respuesta del servidor (refresh):', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error al renovar token:', errorText);
+        this.clearTokens();
         return null;
       }
 
-      await this.validateConfig();
-      const { baseUrl, statusEndpoint } = await this.getConfigValues();
-      const url = `${baseUrl}${statusEndpoint}/${encodeURIComponent(appName)}`;
+      const tokenData: TokenResponse = await response.json();
+      console.log('Token renovado exitosamente');
       
-      console.log('Obteniendo estado de la app:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // App no encontrada
-        }
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const status: AppStatus = await response.json();
-      return status;
+      this.saveToken(tokenData);
+      
+      return tokenData;
     } catch (error) {
-      console.error('Error obteniendo estado de la app:', error);
+      console.error('Error al renovar el token:', error);
+      this.clearTokens();
       return null;
     }
   }
 
-
-  /**
-   * Descarga el proyecto generado como TAR.GZ
-   */
-  static async downloadGeneratedProject(appName: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const token = await AuthService.getValidToken();
-      if (!token) {
-        return { success: false, message: 'No hay token de autenticación disponible' };
-      }
-
-      await this.validateConfig();
-      const { baseUrl, generatedEndpoint } = await this.getConfigValues();
-      const url = `${baseUrl}${generatedEndpoint}?app=${encodeURIComponent(appName)}`;
-      
-      console.log('Descargando proyecto generado para:', appName);
-      console.log('URL:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      console.log('Respuesta del servidor:', result);
-      
-      // Buscar el base64 en diferentes campos posibles
-      const base64Data = result.base64 || result.data || result.content || result.file;
-      
-      if (!base64Data) {
-        console.error('No se encontró base64 en la respuesta:', result);
-        throw new Error('No se encontró el contenido del proyecto en la respuesta');
-      }
-
-      // Validar que el base64 no esté vacío
-      if (typeof base64Data !== 'string' || base64Data.trim() === '') {
-        throw new Error('El contenido base64 está vacío o es inválido');
-      }
-
-      const fileName = `${appName}-generated-project.tar.gz`;
-      
-      try {
-        // Convertir base64 a bytes de manera más robusta
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        // Crear blob como TAR.GZ
-        const blob = new Blob([bytes], { type: 'application/gzip' });
-        
-        console.log('Blob creado:', {
-          size: blob.size,
-          type: blob.type
-        });
-        
-        // Crear enlace de descarga
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = fileName;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Limpiar URL después de un breve delay
-        setTimeout(() => {
-          window.URL.revokeObjectURL(downloadUrl);
-        }, 100);
-        
-        return {
-          success: true,
-          message: `Proyecto ${appName} descargado exitosamente como ${fileName}`
-        };
-        
-      } catch (base64Error) {
-        console.error('Error procesando base64:', base64Error);
-        throw new Error('Error al procesar el contenido base64 del archivo');
-      }
-      
-    } catch (error) {
-      console.error('Error descargando proyecto:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Error desconocido'
-      };
+  private saveToken(tokenData: TokenResponse): void {
+    // Validar que los campos requeridos existan
+    if (!tokenData.access_token) {
+      console.error('Token no contiene access_token');
+      return;
     }
+
+    // Usar 'Bearer' como token_type por defecto si no viene en la respuesta
+    const tokenType = tokenData.token_type || 'Bearer';
+    console.log('Token type:', tokenType);
+
+    localStorage.setItem('access_token', tokenData.access_token);
+    localStorage.setItem('token_type', tokenType);
+    
+    
+    if (tokenData.expires_in !== undefined && tokenData.expires_in !== null) {
+      localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
+      
+     
+      const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
+      localStorage.setItem('token_expires_at', expiresAt.toString());
+      console.log('Fecha de expiración calculada:', new Date(expiresAt).toISOString());
+    } else {
+      console.warn('Token no contiene expires_in, no se puede calcular expiración');
+   
+      const defaultExpiresIn = 3600; 
+      localStorage.setItem('token_expires_in', defaultExpiresIn.toString());
+      const expiresAt = new Date().getTime() + (defaultExpiresIn * 1000);
+      localStorage.setItem('token_expires_at', expiresAt.toString());
+      console.log('Usando expiración por defecto (1 hora)');
+    }
+    
+
+    if (tokenData.refresh_token) {
+      localStorage.setItem('refresh_token', tokenData.refresh_token);
+      console.log('Refresh token guardado');
+    } else {
+      console.log('No hay refresh token disponible');
+    }
+    
+    console.log('Token guardado en localStorage exitosamente');
+  }
+
+  getStoredToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
+  isTokenExpired(): boolean {
+    const expiresAt = localStorage.getItem('token_expires_at');
+    if (!expiresAt) return true;
+    
+    const isExpired = new Date().getTime() > parseInt(expiresAt);
+    if (isExpired) {
+      console.log('Token expirado');
+    }
+    return isExpired;
+  }
+
+  getAuthHeader(): string | null {
+    const token = this.getStoredToken();
+    const tokenType = localStorage.getItem('token_type') || 'Bearer';
+    
+    if (!token || this.isTokenExpired()) {
+      return null;
+    }
+    
+    return `${tokenType} ${token}`;
+  }
+
+  async getValidToken(): Promise<string | null> {
+    const currentToken = this.getStoredToken();
+    
+    // Si no hay token guardado, no se puede hacer nada
+    if (!currentToken) {
+      console.warn('No hay token de acceso guardado');
+      return null;
+    }
+
+    // Si el token no está expirado, devolverlo
+    if (!this.isTokenExpired()) {
+      return currentToken;
+    }
+
+    console.log('Token expirado, intentando renovar...');
+    const refreshedToken = await this.refreshToken();
+    return refreshedToken ? refreshedToken.access_token : null;
+  }
+
+  clearTokens(): void {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token_type');
+    localStorage.removeItem('token_expires_in');
+    localStorage.removeItem('token_expires_at');
+    localStorage.removeItem('refresh_token');
+    console.log('Tokens limpiados del localStorage');
+  }
+
+  isAuthenticated(): boolean {
+    const token = this.getStoredToken();
+    const authenticated = token !== null && !this.isTokenExpired();
+    console.log('Usuario autenticado:', authenticated);
+    return authenticated;
   }
 
 }
+
+export default new AuthService();
