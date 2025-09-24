@@ -1,39 +1,47 @@
-import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+export type AppConfig = Record<string, string>;
 
-const originalFetch = global.fetch;
+class ConfigService {
+  private static configCache: AppConfig | null = null;
+  private static loadingPromise: Promise<AppConfig> | null = null;
 
-describe('ConfigService', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    global.fetch = vi.fn();
-  });
+  static async load(): Promise<AppConfig> {
+    if (this.configCache) return this.configCache;
+    if (this.loadingPromise) return this.loadingPromise;
 
-  it('carga y cachea param.json', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ FOO: 'BAR' })
-    });
+    this.loadingPromise = fetch('/param.json')
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`No se pudo cargar param.json: ${res.status}`);
+        const cfg = (await res.json()) as AppConfig;
+        this.configCache = cfg;
+        return cfg;
+      })
+      .catch((err) => {
+        console.warn('Fallo al cargar param.json, usando import.meta.env como fallback', err);
+        const env: AppConfig = {} as AppConfig;
+        Object.keys(import.meta.env || {}).forEach((k) => {
+          const v = (import.meta.env as unknown as Record<string, string>)[k];
+          if (typeof v === 'string') env[k] = v;
+        });
+        this.configCache = env;
+        return env;
+      })
+      .finally(() => {
+        this.loadingPromise = null;
+      });
 
-    const ConfigService = (await import('../ConfigService')).default;
+    return this.loadingPromise;
+  }
 
-    const v1 = await ConfigService.get('FOO');
-    const v2 = await ConfigService.get('FOO');
+  static async get(key: string, defaultValue?: string): Promise<string | undefined> {
+    const cfg = await this.load();
+    return cfg[key] ?? defaultValue;
+  }
 
-    expect(v1).toBe('BAR');
-    expect(v2).toBe('BAR');
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-  });
+  static clearCache(): void {
+    this.configCache = null;
+    this.loadingPromise = null;
+  }
+}
 
-  it('usa import.meta.env como fallback si falla fetch', async () => {
-    (global.fetch as any).mockRejectedValueOnce(new Error('network'));
+export default ConfigService;
 
-    const ConfigService = (await import('../ConfigService')).default;
-
-    const v = await ConfigService.get('VITE_CLIENT_ID', 'default');
-    expect(v).toBeDefined();
-  });
-
-  afterAll(() => {
-    global.fetch = originalFetch as any;
-  });
-});
