@@ -1,283 +1,358 @@
-import ConfigService from './ConfigService';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-}
+// Mock de localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
 
-class AuthService {
-  private redirectUri: string | undefined = import.meta.env.VITE_REDIRECT_URI;
-  private clientId: string | undefined = import.meta.env.VITE_CLIENT_ID;
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
 
-  constructor() {
-    console.log('AuthService: Constructor iniciado');
-    console.log('AuthService: Valores iniciales desde import.meta.env:');
-    console.log('  - VITE_REDIRECT_URI:', this.redirectUri);
-    console.log('  - VITE_CLIENT_ID:', this.clientId);
-    
-    // Cargar valores también desde param.json si existe
-    ConfigService.get('VITE_REDIRECT_URI', this.redirectUri).then(v => {
-      this.redirectUri = v;
-      console.log('AuthService: VITE_REDIRECT_URI actualizado a:', v);
-    });
-    ConfigService.get('VITE_CLIENT_ID', this.clientId).then(v => {
-      this.clientId = v;
-      console.log('AuthService: VITE_CLIENT_ID actualizado a:', v);
-    });
+// Mock de fetch
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
+// Mock de btoa para Basic Auth
+global.btoa = vi.fn((str: string) => Buffer.from(str).toString('base64'));
+
+// Mock de ConfigService para valores de param.json (usar vi.hoisted para evitar TDZ)
+const hoistedCfg = vi.hoisted(() => ({
+  VITE_JWT_ENDPOINT: 'https://ssm.dcloud.cl.bsch/oauth/token',
+  VITE_REFRESH_ENDPOINT: 'https://ssm.dcloud.cl.bsch/oauth/token',
+  VITE_REDIRECT_URI: 'https://webtools-portal.dcloud.cl.bsch/',
+  VITE_CLIENT_ID: 'webtools'
+} as Record<string, string>));
+vi.mock('../ConfigService', () => ({
+  default: {
+    get: vi.fn(async (key: string, def?: string) => hoistedCfg[key] ?? def)
   }
+}));
 
-  /**
-   * Obtiene el token JWT usando el código de autorización
-   * Usa el proxy configurado en Vite para evitar problemas de CORS y certificados
-   */
-  async getJWTToken(code: string): Promise<TokenResponse> {
-    console.log('AuthService: Obteniendo token JWT con código:', code);
-    console.log('AuthService: redirectUri actual:', this.redirectUri);
-    
-    // Esperar a que ConfigService termine de cargar si es necesario
-    if (!this.redirectUri) {
-      console.log('AuthService: redirectUri no disponible, esperando carga de ConfigService...');
-      this.redirectUri = await ConfigService.get('VITE_REDIRECT_URI', import.meta.env.VITE_REDIRECT_URI);
-      this.clientId = await ConfigService.get('VITE_CLIENT_ID', import.meta.env.VITE_CLIENT_ID);
-      console.log('AuthService: Valores actualizados desde ConfigService:', {
-        redirectUri: this.redirectUri,
-        clientId: this.clientId
-      });
-    }
-    
-    if (!this.redirectUri) {
-      console.error('AuthService: VITE_REDIRECT_URI no está configurado');
-      throw new Error('Configuración de OAuth incompleta. Verifique VITE_REDIRECT_URI.');
-    }
+// Importar AuthService después de configurar los mocks
+import AuthService from '../AuthService';
 
-  
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: this.redirectUri
+describe('AuthService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetch.mockReset();
+  });
+
+
+  describe('getStoredToken', () => {
+    it('debería retornar el token almacenado', () => {
+      localStorageMock.getItem.mockReturnValue('stored-token');
+      const result = AuthService.getStoredToken();
+      expect(localStorageMock.getItem).toHaveBeenCalledWith('access_token');
+      expect(result).toBe('stored-token');
     });
 
-    try {
-      const endpoint = await ConfigService.get('VITE_JWT_ENDPOINT', import.meta.env.VITE_JWT_ENDPOINT);
-      if (!endpoint) {
-        console.error('AuthService: VITE_JWT_ENDPOINT no está configurado');
-        throw new Error('Configuración de OAuth incompleta. Verifique VITE_JWT_ENDPOINT.');
-      }
-      console.log('AuthService: Endpoint OAuth:', endpoint);
-      console.log('Parámetros:', params.toString());
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'true-client-ip': '0.0.0.0',
-          'oauth_type': 'iam',
-          'Authorization': 'Basic ' + btoa('webtools:webtools')
-        },
-        body: params.toString(),
-        mode: 'cors',
-        credentials: 'include'
-      });
+    it('debería retornar null si no hay token', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.getStoredToken();
+      expect(result).toBeNull();
+    });
+  });
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
+  describe('clearTokens', () => {
+    it('debería limpiar todos los tokens del localStorage', () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      AuthService.clearTokens();
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_type');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_in');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('token_expires_at');
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+      expect(consoleSpy).toHaveBeenCalledWith('Tokens limpiados del localStorage');
+      consoleSpy.mockRestore();
+    });
+  });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error en la respuesta:', errorText);
-        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
-      }
-
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token obtenido exitosamente');
-      console.log('Estructura del token recibido:', JSON.stringify(tokenData, null, 2));
-      
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al obtener el token JWT:', error);
-      throw error;
-    }
-  }
-
-  async refreshToken(): Promise<TokenResponse | null> {
-    // Esperar a que ConfigService termine de cargar si es necesario
-    if (!this.clientId) {
-      console.log('AuthService: clientId no disponible, esperando carga de ConfigService...');
-      this.clientId = await ConfigService.get('VITE_CLIENT_ID', import.meta.env.VITE_CLIENT_ID);
-      console.log('AuthService: clientId actualizado desde ConfigService:', this.clientId);
-    }
-    
-    if (!this.clientId) {
-      console.warn('No hay client_id configurado');
-      return null;
-    }
-
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      console.warn('No hay refresh token disponible');
-      return null;
-    }
-
-    const bodyParams = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: this.clientId,
-      refresh_token: refreshToken
+  describe('isTokenExpired', () => {
+    it('debería retornar true si no hay fecha de expiración', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(true);
     });
 
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'true-client-ip': '0.0.0.0',
-        'oauth_type': 'iam',
-        'Authorization': 'Basic ' + btoa('webtools:webtools')
+    it('debería retornar true si el token está expirado', () => {
+      const pastTime = new Date().getTime() - 1000;
+      localStorageMock.getItem.mockReturnValue(pastTime.toString());
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(true);
+    });
+
+    it('debería retornar false si el token no está expirado', () => {
+      const futureTime = new Date().getTime() + 1000000;
+      localStorageMock.getItem.mockReturnValue(futureTime.toString());
+      const result = AuthService.isTokenExpired();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getAuthHeader', () => {
+    it('debería retornar el header de autorización con token válido', () => {
+      const futureTime = new Date().getTime() + 1000000;
+      localStorageMock.getItem
+        .mockReturnValueOnce('test-token')
+        .mockReturnValueOnce('Bearer')
+        .mockReturnValueOnce(futureTime.toString());
+      const result = AuthService.getAuthHeader();
+      expect(result).toBe('Bearer test-token');
+    });
+
+    it('debería retornar null si no hay token', () => {
+      localStorageMock.getItem.mockReturnValue(null);
+      const result = AuthService.getAuthHeader();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getJWTToken (directo a backend)', () => {
+    it('debería llamar al endpoint con POST y x-www-form-urlencoded sin client_id', async () => {
+      const responseBody = {
+        access_token: 'acc',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'ref',
       };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
 
-      const endpoint = await ConfigService.get('VITE_REFRESH_ENDPOINT', import.meta.env.VITE_REFRESH_ENDPOINT);
-      if (!endpoint) {
-        console.warn('VITE_REFRESH_ENDPOINT no configurado');
-        this.clearTokens();
-        return null;
-      }
-      console.log('Endpoint refresh:', endpoint);
-      console.log('Parámetros refresh:', bodyParams.toString());
+      await AuthService.getJWTToken('code123');
 
-      const response = await fetch(endpoint, {
+      // Verificar URL y body mediante la primera llamada
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [calledUrl, calledOptions] = (mockFetch.mock.calls[0] ?? []) as [string, any];
+      expect(calledUrl).toBe(hoistedCfg.VITE_JWT_ENDPOINT);
+      expect(calledOptions).toEqual(expect.objectContaining({
         method: 'POST',
-        headers,
-        body: bodyParams.toString(),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'oauth_type': 'iam',
+          'true-client-ip': '0.0.0.0',
+          Authorization: expect.stringContaining('Basic '),
+        }),
+        credentials: 'include',
         mode: 'cors',
-        credentials: 'include'
+      }));
+      const bodySent = String(calledOptions?.body ?? '');
+      expect(bodySent).toContain('grant_type=authorization_code');
+      expect(bodySent).toContain('code=code123');
+      expect(bodySent).toContain('redirect_uri=');
+      expect(bodySent).not.toContain('client_id=');
+
+      // Verificar guardado
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('access_token', 'acc');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_type', 'Bearer');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('refresh_token', 'ref');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
+    });
+
+    it('debería mostrar logs de configuración', async () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      const responseBody = {
+        access_token: 'acc',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      await AuthService.getJWTToken('code123');
+
+      expect(consoleSpy).toHaveBeenCalledWith('AuthService: Obteniendo token JWT con código:', 'code123');
+      expect(consoleSpy).toHaveBeenCalledWith('AuthService: Endpoint OAuth:', hoistedCfg.VITE_JWT_ENDPOINT);
+      consoleSpy.mockRestore();
+    });
+
+    it('debería usar valores existentes cuando ya están disponibles', async () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      const responseBody = {
+        access_token: 'acc',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      // Simular que AuthService ya tiene los valores (caso normal)
+      (AuthService as any).redirectUri = hoistedCfg.VITE_REDIRECT_URI;
+      (AuthService as any).clientId = hoistedCfg.VITE_CLIENT_ID;
+
+      await AuthService.getJWTToken('code123');
+
+      // No debería llamar a ConfigService.get() porque ya tiene los valores
+      expect(consoleSpy).not.toHaveBeenCalledWith('AuthService: redirectUri no disponible, esperando carga de ConfigService...');
+      consoleSpy.mockRestore();
+    });
+
+    it('debería esperar a ConfigService cuando redirectUri no está disponible', async () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      const responseBody = {
+        access_token: 'acc',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      // Simular que AuthService no tiene los valores
+      (AuthService as any).redirectUri = undefined;
+      (AuthService as any).clientId = undefined;
+
+      // Mock ConfigService para simular que redirectUri no está disponible inicialmente
+      const ConfigService = await import('../ConfigService');
+      vi.mocked(ConfigService.default.get)
+        .mockResolvedValueOnce(hoistedCfg.VITE_REDIRECT_URI) // redirectUri
+        .mockResolvedValueOnce(hoistedCfg.VITE_CLIENT_ID) // clientId
+        .mockResolvedValueOnce(hoistedCfg.VITE_JWT_ENDPOINT); // JWT endpoint
+
+      await AuthService.getJWTToken('code123');
+
+      expect(consoleSpy).toHaveBeenCalledWith('AuthService: redirectUri no disponible, esperando carga de ConfigService...');
+      expect(consoleSpy).toHaveBeenCalledWith('AuthService: Valores actualizados desde ConfigService:', {
+        redirectUri: hoistedCfg.VITE_REDIRECT_URI,
+        clientId: hoistedCfg.VITE_CLIENT_ID
       });
+      consoleSpy.mockRestore();
+    });
 
-      console.log('Respuesta del servidor (refresh):', response.status, response.statusText);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error al renovar token:', errorText);
-        this.clearTokens();
-        return null;
-      }
+    it('debería manejar respuesta no OK', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: vi.fn().mockResolvedValue('bad'),
+      } as any);
 
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token renovado exitosamente');
+      await expect(AuthService.getJWTToken('badcode')).rejects.toThrow('Error al obtener token: 400 Bad Request');
+    });
+  });
+
+  describe('refreshToken (directo a backend)', () => {
+    it('debería llamar al endpoint con POST y guardar token', async () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('ref') 
+        .mockReturnValueOnce('acc'); 
+
+      const responseBody = {
+        access_token: 'new-acc',
+        token_type: 'Bearer',
+        expires_in: 1800,
+        refresh_token: 'new-ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      const result = await AuthService.refreshToken();
+      expect(result?.access_token).toBe('new-acc');
+      expect(mockFetch).toHaveBeenCalledWith(
+        hoistedCfg.VITE_REFRESH_ENDPOINT,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+          body: expect.stringContaining('grant_type=refresh_token'),
+        })
+      );
+    });
+
+    it('debería esperar a ConfigService cuando clientId no está disponible', async () => {
+      const consoleSpy = vi.spyOn(console, 'log');
+      const responseBody = {
+        access_token: 'new-acc',
+        token_type: 'Bearer',
+        expires_in: 1800,
+        refresh_token: 'new-ref',
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      localStorageMock.getItem.mockReturnValue('ref');
+
+      // Mock ConfigService para simular que clientId no está disponible inicialmente
+      const ConfigService = await import('../ConfigService');
+      vi.mocked(ConfigService.default.get)
+        .mockResolvedValueOnce(hoistedCfg.VITE_CLIENT_ID) // clientId
+        .mockResolvedValueOnce(hoistedCfg.VITE_REFRESH_ENDPOINT); // refresh endpoint
+
+      const result = await AuthService.refreshToken();
+
+      expect(result?.access_token).toBe('new-acc');
+      expect(consoleSpy).toHaveBeenCalledWith('AuthService: clientId no disponible, esperando carga de ConfigService...');
+      expect(consoleSpy).toHaveBeenCalledWith('AuthService: clientId actualizado desde ConfigService:', hoistedCfg.VITE_CLIENT_ID);
+      consoleSpy.mockRestore();
+    });
+
+    it('debería manejar error cuando VITE_REFRESH_ENDPOINT no está configurado', async () => {
+      const consoleSpy = vi.spyOn(console, 'warn');
+      const ConfigService = await import('../ConfigService');
+      vi.mocked(ConfigService.default.get).mockResolvedValue(undefined);
+
+      localStorageMock.getItem.mockReturnValue('ref');
+
+      const result = await AuthService.refreshToken();
       
-      this.saveToken(tokenData);
+      expect(result).toBeNull();
+      expect(consoleSpy).toHaveBeenCalledWith('VITE_REFRESH_ENDPOINT no configurado');
+      consoleSpy.mockRestore();
+    });
+
+    it('debería usar expiración por defecto si expires_in no viene', async () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('ref') 
+        .mockReturnValueOnce('acc');
+
+      const responseBody = {
+        access_token: 'na',
+        token_type: 'Bearer',
+
+      } as any;
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: vi.fn().mockResolvedValue(responseBody),
+      } as any);
+
+      await AuthService.refreshToken();
+
       
-      return tokenData;
-    } catch (error) {
-      console.error('Error al renovar el token:', error);
-      this.clearTokens();
-      return null;
-    }
-  }
-
-  private saveToken(tokenData: TokenResponse): void {
-    // Validar que los campos requeridos existan
-    if (!tokenData.access_token) {
-      console.error('Token no contiene access_token');
-      return;
-    }
-
-    // Usar 'Bearer' como token_type por defecto si no viene en la respuesta
-    const tokenType = tokenData.token_type || 'Bearer';
-    console.log('Token type:', tokenType);
-
-    localStorage.setItem('access_token', tokenData.access_token);
-    localStorage.setItem('token_type', tokenType);
-    
-    
-    if (tokenData.expires_in !== undefined && tokenData.expires_in !== null) {
-      localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
-      
-     
-      const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Fecha de expiración calculada:', new Date(expiresAt).toISOString());
-    } else {
-      console.warn('Token no contiene expires_in, no se puede calcular expiración');
-   
-      const defaultExpiresIn = 3600; 
-      localStorage.setItem('token_expires_in', defaultExpiresIn.toString());
-      const expiresAt = new Date().getTime() + (defaultExpiresIn * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Usando expiración por defecto (1 hora)');
-    }
-    
-
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token);
-      console.log('Refresh token guardado');
-    } else {
-      console.log('No hay refresh token disponible');
-    }
-    
-    console.log('Token guardado en localStorage exitosamente');
-  }
-
-  getStoredToken(): string | null {
-    return localStorage.getItem('access_token');
-  }
-
-  isTokenExpired(): boolean {
-    const expiresAt = localStorage.getItem('token_expires_at');
-    if (!expiresAt) return true;
-    
-    const isExpired = new Date().getTime() > parseInt(expiresAt);
-    if (isExpired) {
-      console.log('Token expirado');
-    }
-    return isExpired;
-  }
-
-  getAuthHeader(): string | null {
-    const token = this.getStoredToken();
-    const tokenType = localStorage.getItem('token_type') || 'Bearer';
-    
-    if (!token || this.isTokenExpired()) {
-      return null;
-    }
-    
-    return `${tokenType} ${token}`;
-  }
-
-  async getValidToken(): Promise<string | null> {
-    const currentToken = this.getStoredToken();
-    
-    // Si no hay token guardado, no se puede hacer nada
-    if (!currentToken) {
-      console.warn('No hay token de acceso guardado');
-      return null;
-    }
-
-    // Si el token no está expirado, devolverlo
-    if (!this.isTokenExpired()) {
-      return currentToken;
-    }
-
-    console.log('Token expirado, intentando renovar...');
-    const refreshedToken = await this.refreshToken();
-    return refreshedToken ? refreshedToken.access_token : null;
-  }
-
-  clearTokens(): void {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token_type');
-    localStorage.removeItem('token_expires_in');
-    localStorage.removeItem('token_expires_at');
-    localStorage.removeItem('refresh_token');
-    console.log('Tokens limpiados del localStorage');
-  }
-
-  isAuthenticated(): boolean {
-    const token = this.getStoredToken();
-    const authenticated = token !== null && !this.isTokenExpired();
-    console.log('Usuario autenticado:', authenticated);
-    return authenticated;
-  }
-
-}
-
-export default new AuthService();
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_in', '3600');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('token_expires_at', expect.any(String));
+    });
+  });
+});
