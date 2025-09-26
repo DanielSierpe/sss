@@ -1,265 +1,152 @@
-import ConfigService from './ConfigService';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-}
+const originalFetch = global.fetch;
+const originalConsoleLog = console.log;
+const originalConsoleWarn = console.warn;
 
-class AuthService {
-  private redirectUri: string | undefined = import.meta.env.VITE_REDIRECT_URI;
-  private clientId: string | undefined = import.meta.env.VITE_CLIENT_ID;
+describe('ConfigService', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    global.fetch = vi.fn();
+    console.log = vi.fn();
+    console.warn = vi.fn();
+  });
 
-  constructor() {
-    console.log('AuthService: Constructor iniciado');
-    console.log('AuthService: Valores iniciales desde import.meta.env:');
-    console.log('  - VITE_REDIRECT_URI:', this.redirectUri);
-    console.log('  - VITE_CLIENT_ID:', this.clientId);
-    
-    // Cargar valores también desde param.json si existe
-    ConfigService.get('VITE_REDIRECT_URI', this.redirectUri).then(v => {
-      this.redirectUri = v;
-      console.log('AuthService: VITE_REDIRECT_URI actualizado a:', v);
-    });
-    ConfigService.get('VITE_CLIENT_ID', this.clientId).then(v => {
-      this.clientId = v;
-      console.log('AuthService: VITE_CLIENT_ID actualizado a:', v);
-    });
-  }
+  afterAll(() => {
+    global.fetch = originalFetch as any;
+    console.log = originalConsoleLog;
+    console.warn = originalConsoleWarn;
+  });
 
-  /**
-   * Obtiene el token JWT usando el código de autorización
-   * Usa el proxy configurado en Vite para evitar problemas de CORS y certificados
-   */
-  async getJWTToken(code: string): Promise<TokenResponse> {
-    console.log('AuthService: Obteniendo token JWT con código:', code);
-    console.log('AuthService: redirectUri actual:', this.redirectUri);
-    
-    if (!this.redirectUri) {
-      console.error('AuthService: VITE_REDIRECT_URI no está configurado');
-      throw new Error('Configuración de OAuth incompleta. Verifique VITE_REDIRECT_URI.');
-    }
-
-  
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: this.redirectUri
+  it('carga y cachea param.json exitosamente', async () => {
+    const mockConfig = { FOO: 'BAR', VITE_CLIENT_ID: 'test-client' };
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
     });
 
-    try {
-      const endpoint = await ConfigService.get('VITE_JWT_ENDPOINT', import.meta.env.VITE_JWT_ENDPOINT);
-      if (!endpoint) {
-        console.error('AuthService: VITE_JWT_ENDPOINT no está configurado');
-        throw new Error('Configuración de OAuth incompleta. Verifique VITE_JWT_ENDPOINT.');
-      }
-      console.log('AuthService: Endpoint OAuth:', endpoint);
-      console.log('Parámetros:', params.toString());
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'true-client-ip': '0.0.0.0',
-          'oauth_type': 'iam',
-          'Authorization': 'Basic ' + btoa('webtools:webtools')
-        },
-        body: params.toString(),
-        mode: 'cors',
-        credentials: 'include'
-      });
+    const ConfigService = (await import('../ConfigService')).default;
 
-      console.log('Respuesta del servidor:', response.status, response.statusText);
+    const v1 = await ConfigService.get('FOO');
+    const v2 = await ConfigService.get('FOO');
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error en la respuesta:', errorText);
-        throw new Error(`Error al obtener token: ${response.status} ${response.statusText}`);
-      }
+    expect(v1).toBe('BAR');
+    expect(v2).toBe('BAR');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(console.log).toHaveBeenCalledWith('ConfigService: Iniciando carga de params.json desde configmap...');
+    expect(console.log).toHaveBeenCalledWith('ConfigService: Configuración cargada desde params.json (configmap):', mockConfig);
+  });
 
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token obtenido exitosamente');
-      console.log('Estructura del token recibido:', JSON.stringify(tokenData, null, 2));
-      
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al obtener el token JWT:', error);
-      throw error;
-    }
-  }
-
-  async refreshToken(): Promise<TokenResponse | null> {
-    if (!this.clientId) {
-      console.warn('No hay client_id configurado');
-      return null;
-    }
-
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (!refreshToken) {
-      console.warn('No hay refresh token disponible');
-      return null;
-    }
-
-    const bodyParams = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: this.clientId,
-      refresh_token: refreshToken
+  it('usa caché en llamadas posteriores', async () => {
+    const mockConfig = { FOO: 'BAR' };
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
     });
 
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'true-client-ip': '0.0.0.0',
-        'oauth_type': 'iam',
-        'Authorization': 'Basic ' + btoa('webtools:webtools')
-      };
+    const ConfigService = (await import('../ConfigService')).default;
 
-      const endpoint = await ConfigService.get('VITE_REFRESH_ENDPOINT', import.meta.env.VITE_REFRESH_ENDPOINT);
-      if (!endpoint) {
-        console.warn('VITE_REFRESH_ENDPOINT no configurado');
-        this.clearTokens();
-        return null;
-      }
-      console.log('Endpoint refresh:', endpoint);
-      console.log('Parámetros refresh:', bodyParams.toString());
+    // Primera llamada
+    await ConfigService.get('FOO');
+    // Segunda llamada (debería usar caché)
+    await ConfigService.get('FOO');
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: bodyParams.toString(),
-        mode: 'cors',
-        credentials: 'include'
-      });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(console.log).toHaveBeenCalledWith('ConfigService: Usando configuración cacheada desde params.json');
+  });
 
-      console.log('Respuesta del servidor (refresh):', response.status, response.statusText);
+  it('usa import.meta.env como fallback si falla fetch', async () => {
+    (global.fetch as any).mockRejectedValueOnce(new Error('network error'));
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error al renovar token:', errorText);
-        this.clearTokens();
-        return null;
-      }
+    const ConfigService = (await import('../ConfigService')).default;
 
-      const tokenData: TokenResponse = await response.json();
-      console.log('Token renovado exitosamente');
-      
-      this.saveToken(tokenData);
-      
-      return tokenData;
-    } catch (error) {
-      console.error('Error al renovar el token:', error);
-      this.clearTokens();
-      return null;
-    }
-  }
+    const v = await ConfigService.get('VITE_CLIENT_ID', 'default-value');
+    expect(v).toBe('default-value');
+    expect(console.warn).toHaveBeenCalledWith('ConfigService: Fallo al cargar params.json, usando import.meta.env como fallback', expect.any(Error));
+  });
 
-  private saveToken(tokenData: TokenResponse): void {
-    // Validar que los campos requeridos existan
-    if (!tokenData.access_token) {
-      console.error('Token no contiene access_token');
-      return;
-    }
+  it('maneja respuesta HTTP no exitosa', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found'
+    });
 
-    // Usar 'Bearer' como token_type por defecto si no viene en la respuesta
-    const tokenType = tokenData.token_type || 'Bearer';
-    console.log('Token type:', tokenType);
+    const ConfigService = (await import('../ConfigService')).default;
 
-    localStorage.setItem('access_token', tokenData.access_token);
-    localStorage.setItem('token_type', tokenType);
+    const v = await ConfigService.get('VITE_CLIENT_ID', 'fallback');
+    expect(v).toBe('fallback');
+    expect(console.log).toHaveBeenCalledWith('ConfigService: Respuesta de params.json:', 404, 'Not Found');
+  });
+
+  it('indica fuente correcta en logs', async () => {
+    const mockConfig = { VITE_CLIENT_ID: 'from-configmap' };
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
+    });
+
+    const ConfigService = (await import('../ConfigService')).default;
+
+    await ConfigService.get('VITE_CLIENT_ID');
+    expect(console.log).toHaveBeenCalledWith('ConfigService: VITE_CLIENT_ID = "from-configmap" (fuente: params.json (configmap))');
+  });
+
+  it('indica fallback en logs cuando no encuentra clave', async () => {
+    const mockConfig = { OTHER_KEY: 'value' };
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
+    });
+
+    const ConfigService = (await import('../ConfigService')).default;
+
+    await ConfigService.get('VITE_CLIENT_ID', 'fallback-value');
+    expect(console.log).toHaveBeenCalledWith('ConfigService: VITE_CLIENT_ID = "fallback-value" (fuente: import.meta.env (fallback))');
+  });
+
+  it('limpia caché correctamente', async () => {
+    const mockConfig = { FOO: 'BAR' };
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
+    });
+
+    const ConfigService = (await import('../ConfigService')).default;
+
+    await ConfigService.get('FOO');
+    ConfigService.clearCache();
     
+    // Nueva llamada debería hacer fetch nuevamente
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
+    });
     
-    if (tokenData.expires_in !== undefined && tokenData.expires_in !== null) {
-      localStorage.setItem('token_expires_in', tokenData.expires_in.toString());
-      
-     
-      const expiresAt = new Date().getTime() + (tokenData.expires_in * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Fecha de expiración calculada:', new Date(expiresAt).toISOString());
-    } else {
-      console.warn('Token no contiene expires_in, no se puede calcular expiración');
-   
-      const defaultExpiresIn = 3600; 
-      localStorage.setItem('token_expires_in', defaultExpiresIn.toString());
-      const expiresAt = new Date().getTime() + (defaultExpiresIn * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-      console.log('Usando expiración por defecto (1 hora)');
-    }
+    await ConfigService.get('FOO');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('maneja múltiples llamadas concurrentes', async () => {
+    const mockConfig = { FOO: 'BAR' };
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockConfig
+    });
+
+    const ConfigService = (await import('../ConfigService')).default;
+
+    // Hacer múltiples llamadas concurrentes
+    const promises = [
+      ConfigService.get('FOO'),
+      ConfigService.get('FOO'),
+      ConfigService.get('FOO')
+    ];
+
+    const results = await Promise.all(promises);
     
-
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token);
-      console.log('Refresh token guardado');
-    } else {
-      console.log('No hay refresh token disponible');
-    }
-    
-    console.log('Token guardado en localStorage exitosamente');
-  }
-
-  getStoredToken(): string | null {
-    return localStorage.getItem('access_token');
-  }
-
-  isTokenExpired(): boolean {
-    const expiresAt = localStorage.getItem('token_expires_at');
-    if (!expiresAt) return true;
-    
-    const isExpired = new Date().getTime() > parseInt(expiresAt);
-    if (isExpired) {
-      console.log('Token expirado');
-    }
-    return isExpired;
-  }
-
-  getAuthHeader(): string | null {
-    const token = this.getStoredToken();
-    const tokenType = localStorage.getItem('token_type') || 'Bearer';
-    
-    if (!token || this.isTokenExpired()) {
-      return null;
-    }
-    
-    return `${tokenType} ${token}`;
-  }
-
-  async getValidToken(): Promise<string | null> {
-    const currentToken = this.getStoredToken();
-    
-    // Si no hay token guardado, no se puede hacer nada
-    if (!currentToken) {
-      console.warn('No hay token de acceso guardado');
-      return null;
-    }
-
-    // Si el token no está expirado, devolverlo
-    if (!this.isTokenExpired()) {
-      return currentToken;
-    }
-
-    console.log('Token expirado, intentando renovar...');
-    const refreshedToken = await this.refreshToken();
-    return refreshedToken ? refreshedToken.access_token : null;
-  }
-
-  clearTokens(): void {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('token_type');
-    localStorage.removeItem('token_expires_in');
-    localStorage.removeItem('token_expires_at');
-    localStorage.removeItem('refresh_token');
-    console.log('Tokens limpiados del localStorage');
-  }
-
-  isAuthenticated(): boolean {
-    const token = this.getStoredToken();
-    const authenticated = token !== null && !this.isTokenExpired();
-    console.log('Usuario autenticado:', authenticated);
-    return authenticated;
-  }
-
-}
-
-export default new AuthService();
+    expect(results).toEqual(['BAR', 'BAR', 'BAR']);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(console.log).toHaveBeenCalledWith('ConfigService: Esperando carga en progreso...');
+  });
+});
