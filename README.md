@@ -275,8 +275,8 @@
 					</div>
 					<h1 class="title">Bienvenido</h1>
 					<p class="subtitle">Ingresa tus credenciales para continuar</p>
-					<div class='alert error' th:if="${error}">Usuario o contraseña incorrectos.</div>
-					<div class='alert info' th:if="${logout}">Has cerrado sesión correctamente.</div>
+					<div class='alert error' th:if="${error} or ${param.error}">Usuario o contraseña incorrectos.</div>
+					<div class='alert info' th:if="${logout} or ${param.logout}">Has cerrado sesión correctamente.</div>
 					<div class='inputWrapper'>
 						<div class='inputContainer'>
 						<input type='text' name='username' id='username' required='required' placeholder="RUT Funcionarios (Ej: 122748426)"/>
