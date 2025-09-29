@@ -242,6 +242,27 @@
 			.inputContainer input:not(:placeholder-shown) {
 				border-color: #ec0000;
 			}
+
+			/* Mensajes de alerta */
+			.alert {
+				margin-bottom: 20px;
+				padding: 12px 16px;
+				border-radius: 10px;
+				font-size: 14px;
+				line-height: 1.4;
+			}
+
+			.alert.error {
+				background-color: #fde8e8;
+				border: 1px solid #f8b4b4;
+				color: #8a1f1f;
+			}
+
+			.alert.info {
+				background-color: #e8f1fd;
+				border: 1px solid #b4d0f8;
+				color: #1f3c8a;
+			}
 		</style>
 		
 	</head>  			 			
@@ -254,6 +275,8 @@
 					</div>
 					<h1 class="title">Bienvenido</h1>
 					<p class="subtitle">Ingresa tus credenciales para continuar</p>
+					<div class='alert error' th:if="${error}">Usuario o contraseña incorrectos.</div>
+					<div class='alert info' th:if="${logout}">Has cerrado sesión correctamente.</div>
 					<div class='inputWrapper'>
 						<div class='inputContainer'>
 						<input type='text' name='username' id='username' required='required' placeholder="RUT Funcionarios (Ej: 122748426)"/>
@@ -262,6 +285,7 @@
 						<div class='inputContainer'>
 							<input type='password' name='password' id='password' required='required' placeholder="Clave de acceso Intranet"/>
 						</div>
+						<input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
 						<button id='login_button' type='submit' name='login' value='true'>Ingresar</button>							
 			        </div>
 				</form>
